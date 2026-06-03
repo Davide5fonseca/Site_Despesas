@@ -57,6 +57,7 @@ export interface Despesa {
   categoria_cor: string | null;
   membro_id: number | null;
   membro_nome: string | null;
+  participantes: number[]; // membros que dividem o custo
 }
 
 export interface DespesaInput {
@@ -66,6 +67,26 @@ export interface DespesaInput {
   membro_id: number | null;
   data: string;
   origem: Origem;
+  participantes: number[];
+}
+
+export interface Saldos {
+  mes: string | null;
+  despesasContadas: number;
+  saldos: Array<{
+    membro_id: number;
+    nome: string;
+    pagou: number;
+    deve: number;
+    saldo: number; // >0 tem a receber; <0 deve
+  }>;
+  transferencias: Array<{
+    de_id: number;
+    de_nome: string;
+    para_id: number;
+    para_nome: string;
+    valor: number;
+  }>;
 }
 
 export interface Resumo {
@@ -160,12 +181,23 @@ export const api = {
     return pedir<Resumo>(`/resumo?mes=${mes}`);
   },
 
+  // Saldos / acertar contas (mes opcional)
+  saldos(mes?: string) {
+    return pedir<Saldos>(`/saldos${mes ? `?mes=${mes}` : ""}`);
+  },
+
   // Categorias
   listarCategorias() {
     return pedir<Categoria[]>("/categorias");
   },
   criarCategoria(nome: string, cor: string) {
     return pedir<Categoria>("/categorias", { method: "POST", body: JSON.stringify({ nome, cor }) });
+  },
+  editarCategoria(id: number, nome: string, cor: string) {
+    return pedir<Categoria>(`/categorias/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ nome, cor }),
+    });
   },
   apagarCategoria(id: number) {
     return pedir<void>(`/categorias/${id}`, { method: "DELETE" });
@@ -177,6 +209,9 @@ export const api = {
   },
   criarMembro(nome: string) {
     return pedir<Membro>("/membros", { method: "POST", body: JSON.stringify({ nome }) });
+  },
+  editarMembro(id: number, nome: string) {
+    return pedir<Membro>(`/membros/${id}`, { method: "PUT", body: JSON.stringify({ nome }) });
   },
   apagarMembro(id: number) {
     return pedir<void>(`/membros/${id}`, { method: "DELETE" });

@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, Categoria, Membro, Resumo as ResumoT } from "../api/client";
 import { formatarEuros, formatarMes, mesAtual } from "../lib/format";
+import { useAtualizarAuto } from "../lib/useAtualizar";
+import { deslocarMes } from "../components/ui/SeletorMes";
+import Secao from "../components/ui/Secao";
 import NovaDespesa from "../components/NovaDespesa";
 import GraficoCategorias from "../components/GraficoCategorias";
 import GraficoMensal from "../components/GraficoMensal";
-
-function deslocarMes(mes: string, delta: number): string {
-  const [a, m] = mes.split("-").map(Number);
-  const d = new Date(a, m - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
 
 export default function Resumo() {
   const [mes, setMes] = useState(mesAtual());
@@ -37,38 +34,58 @@ export default function Resumo() {
   useEffect(() => {
     carregar();
   }, [carregar]);
+  useAtualizarAuto(carregar);
+
+  const nCategorias = resumo?.porCategoria.filter((c) => c.total > 0).length ?? 0;
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-100">Despesas da Casa</h1>
-        <p className="text-sm text-slate-400">Para onde vai o dinheiro, mês a mês.</p>
-      </header>
+      {/* Hero: total do mês com navegação integrada */}
+      <section className="relative overflow-hidden rounded-xl2 bg-gradient-to-br from-marca-600 to-marca-800 p-5 text-white shadow-cartao">
+        <div
+          className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-white/10"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute -bottom-16 -left-8 h-40 w-40 rounded-full bg-black/10"
+          aria-hidden
+        />
+        <div className="relative flex items-center justify-between">
+          <button
+            onClick={() => setMes(deslocarMes(mes, -1))}
+            aria-label="Mês anterior"
+            className="rounded-xl p-2 text-white/80 transition hover:bg-white/15 active:scale-90"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+          </button>
+          <div className="text-center">
+            <p className="text-xs font-medium uppercase tracking-wider text-white/70">
+              {formatarMes(mes)}
+            </p>
+            <p className="mt-0.5 text-[40px] font-extrabold leading-none tracking-tight tabular-nums">
+              {resumo ? formatarEuros(resumo.total) : "—"}
+            </p>
+            <p className="mt-1.5 text-xs text-white/70">
+              {resumo && resumo.total > 0
+                ? `${nCategorias} ${nCategorias === 1 ? "categoria" : "categorias"}`
+                : "Sem despesas este mês"}
+            </p>
+          </div>
+          <button
+            onClick={() => setMes(deslocarMes(mes, 1))}
+            aria-label="Mês seguinte"
+            className="rounded-xl p-2 text-white/80 transition hover:bg-white/15 active:scale-90"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      </section>
 
-      {/* Seletor de mês */}
-      <div className="flex items-center justify-between rounded-2xl bg-noite-800/70 p-1.5">
-        <button
-          onClick={() => setMes(deslocarMes(mes, -1))}
-          aria-label="Mês anterior"
-          className="rounded-xl p-2.5 text-slate-300 hover:bg-linha/5"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </button>
-        <span className="font-semibold text-slate-100">{formatarMes(mes)}</span>
-        <button
-          onClick={() => setMes(deslocarMes(mes, 1))}
-          aria-label="Mês seguinte"
-          className="rounded-xl p-2.5 text-slate-300 hover:bg-linha/5"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Ações principais */}
+      {/* Ações */}
       <NovaDespesa categorias={categorias} membros={membros} onGuardado={carregar} variante="destaque" />
 
       {erro && (
@@ -78,20 +95,14 @@ export default function Resumo() {
       )}
 
       {/* Donut por categoria */}
-      <section className="cartao p-5">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Por categoria
-        </h2>
+      <Secao titulo="Por categoria" icone={<IconeDonut />}>
         {resumo && <GraficoCategorias dados={resumo.porCategoria} total={resumo.total} />}
-      </section>
+      </Secao>
 
       {/* Total por pessoa */}
-      <section className="cartao p-5">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Total por pessoa
-        </h2>
+      <Secao titulo="Total por pessoa" icone={<IconePessoas />}>
         {resumo && resumo.porPessoa.length && resumo.total > 0 ? (
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {resumo.porPessoa.map((p) => {
               const pct = resumo.total > 0 ? (p.total / resumo.total) * 100 : 0;
               return (
@@ -104,7 +115,7 @@ export default function Resumo() {
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-noite-900">
                     <div
-                      className="h-full rounded-full bg-marca-400"
+                      className="h-full rounded-full bg-gradient-to-r from-marca-500 to-marca-300 transition-all"
                       style={{ width: `${Math.max(pct, 3)}%` }}
                     />
                   </div>
@@ -115,15 +126,36 @@ export default function Resumo() {
         ) : (
           <p className="py-4 text-center text-sm text-slate-500">Sem despesas neste mês.</p>
         )}
-      </section>
+      </Secao>
 
       {/* Evolução mensal */}
-      <section className="cartao p-5">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Últimos 6 meses
-        </h2>
+      <Secao titulo="Últimos 6 meses" icone={<IconeBarras />}>
         {resumo && <GraficoMensal dados={resumo.evolucao} mesAtivo={mes} />}
-      </section>
+      </Secao>
     </div>
+  );
+}
+
+function IconeDonut() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 4a8 8 0 0 1 8 8" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconePessoas() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.9" />
+      <path d="M3.5 19a5.5 5.5 0 0 1 11 0M16.5 5.4a3 3 0 0 1 0 5.2M17.5 19a5.5 5.5 0 0 0-3-4.9" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconeBarras() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
   );
 }

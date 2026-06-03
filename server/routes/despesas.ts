@@ -11,17 +11,50 @@ const DespesaInput = z.object({
   membro_id: z.number().int().positive().nullable().optional(),
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve ser YYYY-MM-DD"),
   origem: z.enum(["manual", "talao"]).default("manual"),
+  // Quem divide o custo (para "acertar contas"). Vazio = não entra nos saldos.
+  participantes: z.array(z.number().int().positive()).optional().default([]),
 });
 
 const SELECT_BASE = `
   SELECT
     d.id, d.valor_centimos, d.descricao, d.data, d.origem, d.criado_em,
     d.categoria_id, c.nome AS categoria_nome, c.cor AS categoria_cor,
-    d.membro_id, m.nome AS membro_nome
+    d.membro_id, m.nome AS membro_nome,
+    (SELECT group_concat(dm.membro_id) FROM despesa_membros dm WHERE dm.despesa_id = d.id) AS participantes_csv
   FROM despesas d
   LEFT JOIN categorias c ON c.id = d.categoria_id
   LEFT JOIN membros    m ON m.id = d.membro_id
 `;
+
+// Converte participantes_csv ("1,3,4") em array de números.
+function comParticipantes(row: any) {
+  const { participantes_csv, ...resto } = row;
+  return {
+    ...resto,
+    participantes: participantes_csv
+      ? String(participantes_csv).split(",").map(Number)
+      : [],
+  };
+}
+
+// Filtra a lista de participantes para apenas os membros que pertencem à família.
+function participantesValidos(familiaId: number, ids: number[]): number[] {
+  if (!ids.length) return [];
+  const validos = new Set(
+    (db.prepare("SELECT id FROM membros WHERE familia_id = ?").all(familiaId) as Array<{
+      id: number;
+    }>).map((m) => m.id)
+  );
+  return [...new Set(ids)].filter((id) => validos.has(id));
+}
+
+// Prepara a inserção de participantes (lazy: só quando a tabela já existe).
+function gravarParticipantes(despesaId: number, ids: number[]) {
+  const stmt = db.prepare(
+    "INSERT OR IGNORE INTO despesa_membros (despesa_id, membro_id) VALUES (?, ?)"
+  );
+  for (const mid of ids) stmt.run(despesaId, mid);
+}
 
 // GET /api/despesas?mes=YYYY-MM&categoria=ID
 despesasRouter.get("/", (req, res) => {
@@ -43,9 +76,9 @@ despesasRouter.get("/", (req, res) => {
 
   const linhas = db
     .prepare(`${SELECT_BASE} WHERE ${condicoes.join(" AND ")} ORDER BY d.data DESC, d.id DESC`)
-    .all(...params);
+    .all(...params) as any[];
 
-  res.json(linhas);
+  res.json(linhas.map(comParticipantes));
 });
 
 // POST /api/despesas
@@ -54,15 +87,23 @@ despesasRouter.post("/", (req, res) => {
   const parsed = DespesaInput.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
   const d = parsed.data;
-  const info = db
-    .prepare(
-      `INSERT INTO despesas (familia_id, valor_centimos, descricao, categoria_id, membro_id, data, origem)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(familiaId, d.valor_centimos, d.descricao, d.categoria_id ?? null, d.membro_id ?? null, d.data, d.origem);
+  const parts = participantesValidos(familiaId, d.participantes);
 
-  const nova = db.prepare(`${SELECT_BASE} WHERE d.id = ?`).get(info.lastInsertRowid);
-  res.status(201).json(nova);
+  const criar = db.transaction(() => {
+    const info = db
+      .prepare(
+        `INSERT INTO despesas (familia_id, valor_centimos, descricao, categoria_id, membro_id, data, origem)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(familiaId, d.valor_centimos, d.descricao, d.categoria_id ?? null, d.membro_id ?? null, d.data, d.origem);
+    const id = Number(info.lastInsertRowid);
+    gravarParticipantes(id, parts);
+    return id;
+  });
+  const id = criar();
+
+  const nova = db.prepare(`${SELECT_BASE} WHERE d.id = ?`).get(id);
+  res.status(201).json(comParticipantes(nova));
 });
 
 // PUT /api/despesas/:id
@@ -72,17 +113,25 @@ despesasRouter.put("/:id", (req, res) => {
   const parsed = DespesaInput.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
   const d = parsed.data;
-  const info = db
-    .prepare(
-      `UPDATE despesas
-         SET valor_centimos = ?, descricao = ?, categoria_id = ?, membro_id = ?, data = ?, origem = ?
-       WHERE id = ? AND familia_id = ?`
-    )
-    .run(d.valor_centimos, d.descricao, d.categoria_id ?? null, d.membro_id ?? null, d.data, d.origem, id, familiaId);
+  const parts = participantesValidos(familiaId, d.participantes);
 
-  if (info.changes === 0) return res.status(404).json({ erro: "Não encontrada" });
+  const atualizar = db.transaction(() => {
+    const info = db
+      .prepare(
+        `UPDATE despesas
+           SET valor_centimos = ?, descricao = ?, categoria_id = ?, membro_id = ?, data = ?, origem = ?
+         WHERE id = ? AND familia_id = ?`
+      )
+      .run(d.valor_centimos, d.descricao, d.categoria_id ?? null, d.membro_id ?? null, d.data, d.origem, id, familiaId);
+    if (info.changes === 0) return false;
+    db.prepare("DELETE FROM despesa_membros WHERE despesa_id = ?").run(id);
+    gravarParticipantes(id, parts);
+    return true;
+  });
+
+  if (!atualizar()) return res.status(404).json({ erro: "Não encontrada" });
   const atualizada = db.prepare(`${SELECT_BASE} WHERE d.id = ?`).get(id);
-  res.json(atualizada);
+  res.json(comParticipantes(atualizada));
 });
 
 // DELETE /api/despesas/:id

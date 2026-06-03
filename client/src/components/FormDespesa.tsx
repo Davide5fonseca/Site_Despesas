@@ -10,6 +10,7 @@ export interface DadosIniciais {
   membro_id?: number | null;
   data?: string; // YYYY-MM-DD
   origem?: Origem;
+  participantes?: number[]; // quem divide o custo
 }
 
 interface Props {
@@ -34,8 +35,15 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
   const [categoriaId, setCategoriaId] = useState<number | "">(inicial?.categoria_id ?? "");
   const [membroId, setMembroId] = useState<number | "">(inicial?.membro_id ?? "");
   const [data, setData] = useState(inicial?.data ?? hojeISO());
+  // "Dividir por": por omissão todos os membros; ao editar, usa o que estava guardado.
+  const [participantes, setParticipantes] = useState<number[]>(
+    inicial?.participantes ?? membros.map((m) => m.id)
+  );
   const [aGuardar, setAGuardar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  const alternarParticipante = (id: number) =>
+    setParticipantes((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   const editar = inicial?.id != null;
   const emFalta = (campo: string) => talao?.camposEmFalta.includes(campo);
@@ -56,6 +64,7 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
         membro_id: membroId === "" ? null : Number(membroId),
         data,
         origem: inicial?.origem ?? "manual",
+        participantes,
       };
       if (editar) await api.editarDespesa(inicial!.id!, payload);
       else await api.criarDespesa(payload);
@@ -148,6 +157,69 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
           className={`campo ${emFalta("data") ? "ring-2 ring-amber-400" : ""}`}
         />
       </div>
+
+      {/* Dividir por (para "acertar contas") */}
+      {membros.length > 0 && (
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="rotulo mb-0">Dividir por</label>
+            <div className="flex gap-2 text-xs">
+              <button
+                type="button"
+                className="text-marcatxt"
+                onClick={() => setParticipantes(membros.map((m) => m.id))}
+              >
+                Todos
+              </button>
+              <span className="text-slate-600">·</span>
+              <button type="button" className="text-slate-400" onClick={() => setParticipantes([])}>
+                Nenhum
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {membros.map((m) => {
+              const ativo = participantes.includes(m.id);
+              return (
+                <button
+                  type="button"
+                  key={m.id}
+                  onClick={() => alternarParticipante(m.id)}
+                  className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                    ativo
+                      ? "border-transparent bg-marca-500 text-white"
+                      : "border-linha/10 bg-noite-900/50 text-slate-300"
+                  }`}
+                >
+                  {ativo ? "✓ " : ""}
+                  {m.nome}
+                </button>
+              );
+            })}
+          </div>
+          {(() => {
+            const c = parseEurosParaCentimos(valor);
+            if (c && participantes.length > 0) {
+              const cada = Math.floor(c / participantes.length);
+              return (
+                <p className="mt-2 text-xs text-slate-400">
+                  Cada pessoa: {(cada / 100).toLocaleString("pt-PT", { minimumFractionDigits: 2 })} €
+                  {" "}({participantes.length}{" "}
+                  {participantes.length === 1 ? "pessoa" : "pessoas"})
+                </p>
+              );
+            }
+            if (participantes.length === 0) {
+              return (
+                <p className="mt-2 text-xs text-slate-500">
+                  Sem ninguém selecionado, esta despesa não entra no "acertar contas".
+                </p>
+              );
+            }
+            return null;
+          })()}
+        </div>
+      )}
 
       {membros.length === 0 && (
         <p className="text-xs text-slate-500">

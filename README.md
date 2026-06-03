@@ -230,8 +230,9 @@ gráficos do que já carregaste) funciona offline.
 | `PUT` | `/api/despesas/:id` | edita |
 | `DELETE` | `/api/despesas/:id` | apaga |
 | `GET` | `/api/resumo?mes=YYYY-MM` | `{ total, porCategoria[], porPessoa[], evolucao[] }` |
-| `GET/POST/DELETE` | `/api/categorias` | gerir categorias |
-| `GET/POST/DELETE` | `/api/membros` | gerir membros |
+| `GET` | `/api/saldos?mes=YYYY-MM` | acertar contas: `{ saldos[], transferencias[] }` (mes opcional) |
+| `GET/POST/PUT/DELETE` | `/api/categorias` | gerir categorias (PUT = renomear/cor) |
+| `GET/POST/PUT/DELETE` | `/api/membros` | gerir membros (PUT = renomear) |
 | `POST` | `/api/talao/ler` | (multipart, campo `imagem`) extrai dados do talão — **não grava** |
 | `GET` | `/api/saude` | estado da API + se a IA está configurada |
 | `POST` | `/api/familias` | cria família + categorias iniciais → devolve `{ id, codigo, nome }` |

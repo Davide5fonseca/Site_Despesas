@@ -1,6 +1,19 @@
 import { useEffect, useState } from "react";
 import { api, Categoria, Membro, getFamilia, setFamilia } from "../api/client";
 import BotaoTema from "../components/BotaoTema";
+import Modal from "../components/Modal";
+import CabecalhoPagina from "../components/ui/CabecalhoPagina";
+
+const IconePencil = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+    <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+  </svg>
+);
+const IconeLixo = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+  </svg>
+);
 
 const CORES = [
   "#16a34a", "#7c3aed", "#0ea5e9", "#f59e0b",
@@ -16,6 +29,13 @@ export default function Definicoes() {
   const [novaCategoria, setNovaCategoria] = useState("");
   const [novaCor, setNovaCor] = useState(CORES[0]);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Edição
+  const [membroEditId, setMembroEditId] = useState<number | null>(null);
+  const [membroEditNome, setMembroEditNome] = useState("");
+  const [catEditar, setCatEditar] = useState<Categoria | null>(null);
+  const [edNome, setEdNome] = useState("");
+  const [edCor, setEdCor] = useState(CORES[0]);
 
   async function carregar() {
     const [c, m] = await Promise.all([api.listarCategorias(), api.listarMembros()]);
@@ -64,6 +84,39 @@ export default function Definicoes() {
     carregar();
   }
 
+  async function guardarMembroEdit() {
+    const nome = membroEditNome.trim();
+    if (!nome || membroEditId == null) return;
+    setErro(null);
+    try {
+      await api.editarMembro(membroEditId, nome);
+      setMembroEditId(null);
+      carregar();
+    } catch (e: any) {
+      setErro(e?.message || "Falha ao guardar membro.");
+    }
+  }
+
+  function abrirEditarCategoria(c: Categoria) {
+    setCatEditar(c);
+    setEdNome(c.nome);
+    setEdCor(c.cor);
+    setErro(null);
+  }
+  async function guardarCategoriaEdit() {
+    if (!catEditar) return;
+    const nome = edNome.trim();
+    if (!nome) return;
+    setErro(null);
+    try {
+      await api.editarCategoria(catEditar.id, nome, edCor);
+      setCatEditar(null);
+      carregar();
+    } catch (e: any) {
+      setErro(e?.message || "Falha ao guardar categoria.");
+    }
+  }
+
   const familia = getFamilia();
 
   function copiarCodigo() {
@@ -77,15 +130,12 @@ export default function Definicoes() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-100">Definições</h1>
-        <p className="text-sm text-slate-400">Família, aparência, membros e categorias.</p>
-      </header>
+      <CabecalhoPagina titulo="Definições" subtitulo="Família, aparência, membros e categorias" />
 
       {/* Família */}
       {familia && (
         <section className="cartao p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+          <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
             A tua família
           </h2>
           <p className="text-lg font-bold text-slate-100">{familia.nome}</p>
@@ -107,7 +157,7 @@ export default function Definicoes() {
       {/* Aparência */}
       <section className="cartao flex items-center justify-between p-5">
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Aparência</h2>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">Aparência</h2>
           <p className="mt-1 text-sm text-slate-300">Alternar entre tema claro e escuro.</p>
         </div>
         <BotaoTema comRotulo />
@@ -121,7 +171,7 @@ export default function Definicoes() {
 
       {/* Membros */}
       <section className="cartao p-5">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
           Membros da casa
         </h2>
 
@@ -145,23 +195,54 @@ export default function Definicoes() {
           {membros.map((m) => (
             <li
               key={m.id}
-              className="flex items-center justify-between rounded-xl bg-noite-900/50 px-3 py-2.5"
+              className="flex items-center justify-between gap-2 rounded-xl bg-noite-900/50 px-3 py-2"
             >
-              <span className="font-medium text-slate-100">{m.nome}</span>
-              <button
-                onClick={() => apagarMembro(m.id)}
-                className="rounded-lg p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
-                aria-label="Apagar membro"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinecap="round"
+              {membroEditId === m.id ? (
+                <>
+                  <input
+                    className="campo py-1.5"
+                    autoFocus
+                    value={membroEditNome}
+                    onChange={(e) => setMembroEditNome(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && guardarMembroEdit()}
                   />
-                </svg>
-              </button>
+                  <div className="flex shrink-0 gap-1">
+                    <button onClick={guardarMembroEdit} className="rounded-lg p-1.5 text-marcatxt" aria-label="Guardar">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                    <button onClick={() => setMembroEditId(null)} className="rounded-lg p-1.5 text-slate-400" aria-label="Cancelar">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="truncate font-medium text-slate-100">{m.nome}</span>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      onClick={() => {
+                        setMembroEditId(m.id);
+                        setMembroEditNome(m.nome);
+                      }}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-linha/5 hover:text-slate-200"
+                      aria-label="Editar membro"
+                    >
+                      <IconePencil />
+                    </button>
+                    <button
+                      onClick={() => apagarMembro(m.id)}
+                      className="rounded-lg p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
+                      aria-label="Apagar membro"
+                    >
+                      <IconeLixo />
+                    </button>
+                  </div>
+                </>
+              )}
             </li>
           ))}
         </ul>
@@ -169,7 +250,7 @@ export default function Definicoes() {
 
       {/* Categorias */}
       <section className="cartao p-5">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
           Categorias
         </h2>
 
@@ -205,24 +286,26 @@ export default function Definicoes() {
               key={c.id}
               className="flex items-center justify-between rounded-xl bg-noite-900/50 px-3 py-2.5"
             >
-              <span className="flex items-center gap-3">
-                <span className="h-4 w-4 rounded-full" style={{ backgroundColor: c.cor }} />
-                <span className="font-medium text-slate-100">{c.nome}</span>
+              <span className="flex min-w-0 items-center gap-3">
+                <span className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: c.cor }} />
+                <span className="truncate font-medium text-slate-100">{c.nome}</span>
               </span>
-              <button
-                onClick={() => apagarCategoria(c.id)}
-                className="rounded-lg p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
-                aria-label="Apagar categoria"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
+              <div className="flex shrink-0 gap-1">
+                <button
+                  onClick={() => abrirEditarCategoria(c)}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-linha/5 hover:text-slate-200"
+                  aria-label="Editar categoria"
+                >
+                  <IconePencil />
+                </button>
+                <button
+                  onClick={() => apagarCategoria(c.id)}
+                  className="rounded-lg p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-400"
+                  aria-label="Apagar categoria"
+                >
+                  <IconeLixo />
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -231,6 +314,45 @@ export default function Definicoes() {
       <p className="px-1 text-center text-xs text-slate-600">
         Despesas da Casa · PWA · dados guardados no teu servidor
       </p>
+
+      {/* Modal: editar categoria */}
+      <Modal titulo="Editar categoria" aberto={catEditar != null} onFechar={() => setCatEditar(null)}>
+        <div className="space-y-4">
+          <div>
+            <label className="rotulo">Nome</label>
+            <input
+              className="campo"
+              value={edNome}
+              onChange={(e) => setEdNome(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && guardarCategoriaEdit()}
+            />
+          </div>
+          <div>
+            <label className="rotulo">Cor</label>
+            <div className="flex flex-wrap gap-2">
+              {CORES.map((cor) => (
+                <button
+                  key={cor}
+                  onClick={() => setEdCor(cor)}
+                  aria-label={`Cor ${cor}`}
+                  className={`h-8 w-8 rounded-full transition ${
+                    edCor === cor ? "ring-2 ring-marca-400 ring-offset-2 ring-offset-noite-800" : ""
+                  }`}
+                  style={{ backgroundColor: cor }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button className="botao-secundario flex-1" onClick={() => setCatEditar(null)}>
+              Cancelar
+            </button>
+            <button className="botao-primario flex-1" onClick={guardarCategoriaEdit}>
+              Guardar
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

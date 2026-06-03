@@ -36,6 +36,27 @@ membrosRouter.post("/", (req, res) => {
   }
 });
 
+// PUT /api/membros/:id  (renomear)
+membrosRouter.put("/:id", (req, res) => {
+  const familiaId = (req as any).familiaId as number;
+  const id = Number(req.params.id);
+  const parsed = MembroInput.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
+  try {
+    const info = db
+      .prepare("UPDATE membros SET nome = ? WHERE id = ? AND familia_id = ?")
+      .run(parsed.data.nome, id, familiaId);
+    if (info.changes === 0) return res.status(404).json({ erro: "Não encontrado" });
+    const atualizado = db.prepare("SELECT id, nome FROM membros WHERE id = ?").get(id);
+    res.json(atualizado);
+  } catch (e: any) {
+    if (String(e.message).includes("UNIQUE")) {
+      return res.status(409).json({ erro: "Já existe um membro com esse nome" });
+    }
+    throw e;
+  }
+});
+
 // DELETE /api/membros/:id
 membrosRouter.delete("/:id", (req, res) => {
   const familiaId = (req as any).familiaId as number;

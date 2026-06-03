@@ -140,6 +140,15 @@ export function migrate() {
     CREATE INDEX IF NOT EXISTS idx_despesas_membro    ON despesas(membro_id);
     CREATE INDEX IF NOT EXISTS idx_membros_familia    ON membros(familia_id);
     CREATE INDEX IF NOT EXISTS idx_categorias_familia ON categorias(familia_id);
+
+    -- Participantes de cada despesa (quem divide o custo) — para "acertar contas".
+    CREATE TABLE IF NOT EXISTS despesa_membros (
+      despesa_id INTEGER NOT NULL REFERENCES despesas(id) ON DELETE CASCADE,
+      membro_id  INTEGER NOT NULL REFERENCES membros(id)  ON DELETE CASCADE,
+      PRIMARY KEY (despesa_id, membro_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_despmembros_despesa ON despesa_membros(despesa_id);
+    CREATE INDEX IF NOT EXISTS idx_despmembros_membro  ON despesa_membros(membro_id);
   `);
 }
 

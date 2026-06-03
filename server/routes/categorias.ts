@@ -44,6 +44,27 @@ categoriasRouter.post("/", (req, res) => {
   }
 });
 
+// PUT /api/categorias/:id  (renomear / mudar cor)
+categoriasRouter.put("/:id", (req, res) => {
+  const familiaId = (req as any).familiaId as number;
+  const id = Number(req.params.id);
+  const parsed = CategoriaInput.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
+  try {
+    const info = db
+      .prepare("UPDATE categorias SET nome = ?, cor = ? WHERE id = ? AND familia_id = ?")
+      .run(parsed.data.nome, parsed.data.cor, id, familiaId);
+    if (info.changes === 0) return res.status(404).json({ erro: "Não encontrada" });
+    const atualizada = db.prepare("SELECT id, nome, cor FROM categorias WHERE id = ?").get(id);
+    res.json(atualizada);
+  } catch (e: any) {
+    if (String(e.message).includes("UNIQUE")) {
+      return res.status(409).json({ erro: "Já existe uma categoria com esse nome" });
+    }
+    throw e;
+  }
+});
+
 // DELETE /api/categorias/:id
 categoriasRouter.delete("/:id", (req, res) => {
   const familiaId = (req as any).familiaId as number;

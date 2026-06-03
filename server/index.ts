@@ -9,6 +9,7 @@ import { despesasRouter } from "./routes/despesas.js";
 import { categoriasRouter } from "./routes/categorias.js";
 import { membrosRouter } from "./routes/membros.js";
 import { resumoRouter } from "./routes/resumo.js";
+import { saldosRouter } from "./routes/saldos.js";
 import { talaoRouter } from "./routes/talao.js";
 import { familiasRouter } from "./routes/familias.js";
 
@@ -44,6 +45,7 @@ app.use("/api/despesas", exigirFamilia, despesasRouter);
 app.use("/api/categorias", exigirFamilia, categoriasRouter);
 app.use("/api/membros", exigirFamilia, membrosRouter);
 app.use("/api/resumo", exigirFamilia, resumoRouter);
+app.use("/api/saldos", exigirFamilia, saldosRouter);
 app.use("/api/talao", exigirFamilia, talaoRouter);
 
 // ─────────────────────────────────────────────────────────────────────────
