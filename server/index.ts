@@ -1,7 +1,12 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { migrate } from "./db.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import { despesasRouter } from "./routes/despesas.js";
 import { categoriasRouter } from "./routes/categorias.js";
 import { membrosRouter } from "./routes/membros.js";
@@ -25,6 +30,23 @@ app.use("/api/categorias", categoriasRouter);
 app.use("/api/membros", membrosRouter);
 app.use("/api/resumo", resumoRouter);
 app.use("/api/talao", talaoRouter);
+
+// ─────────────────────────────────────────────────────────────────────────
+// Servir o frontend compilado (Opção A: tudo num só serviço).
+// Em produção (Render) o build do cliente fica em client/dist e é servido aqui,
+// na MESMA origem da API -> sem CORS e sem VITE_API_URL.
+// Em desenvolvimento usa-se o Vite (porta 5173) e este bloco é ignorado se não
+// existir build.
+// ─────────────────────────────────────────────────────────────────────────
+const distDir = join(__dirname, "..", "client", "dist");
+if (existsSync(distDir)) {
+  app.use(express.static(distDir));
+  // Fallback SPA: tudo o que não for /api devolve o index.html (React Router).
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api")) return next();
+    res.sendFile(join(distDir, "index.html"));
+  });
+}
 
 // Tratamento de erros não previstos
 app.use(
