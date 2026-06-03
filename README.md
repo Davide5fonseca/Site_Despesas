@@ -234,6 +234,18 @@ gráficos do que já carregaste) funciona offline.
 | `GET/POST/DELETE` | `/api/membros` | gerir membros |
 | `POST` | `/api/talao/ler` | (multipart, campo `imagem`) extrai dados do talão — **não grava** |
 | `GET` | `/api/saude` | estado da API + se a IA está configurada |
+| `POST` | `/api/familias` | cria família + categorias iniciais → devolve `{ id, codigo, nome }` |
+| `POST` | `/api/familias/entrar` | valida um `codigo` e devolve a família |
+| `GET` | `/api/familias/atual` | dados da família atual (via cabeçalho) |
+
+> **Famílias (várias casas):** cada casa tem um **código** (ex.: `MY4TRP`). Quem
+> cria a família recebe o código; os outros **entram com esse código** e passam a
+> ver/registar as mesmas despesas. Cada pedido às rotas de dados leva o cabeçalho
+> `x-familia-codigo`, e o servidor isola tudo por família. Trocas/sais de família
+> em **Definições**. O código é guardado no dispositivo (`localStorage`).
+>
+> **Tema claro/escuro:** botão em *Definições* (e no ecrã inicial). Segue a
+> preferência do sistema por omissão e fica guardado no dispositivo.
 
 **Resposta de `/api/talao/ler`:**
 ```json

@@ -1,24 +1,38 @@
-import { useRef, useState } from "react";
-import { api, TalaoExtraido } from "../api/client";
+import { useEffect, useRef, useState } from "react";
+import { api, Categoria, TalaoExtraido } from "../api/client";
 import { comprimirImagem } from "../lib/imagem";
+import { lerTalaoLocal } from "../lib/ocrTalao";
 
 interface Props {
+  categorias: Categoria[];
   onExtraido: (dados: TalaoExtraido, previewUrl: string) => void;
   onFechar: () => void;
 }
 
 type Estado = "espera" | "a_comprimir" | "a_ler" | "erro";
 
-export default function ScanTalao({ onExtraido, onFechar }: Props) {
+export default function ScanTalao({ categorias, onExtraido, onFechar }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [estado, setEstado] = useState<Estado>("espera");
   const [erro, setErro] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [progresso, setProgresso] = useState(0);
+  // null = ainda a verificar; true = IA na nuvem; false = OCR no telemóvel
+  const [usarIA, setUsarIA] = useState<boolean | null>(null);
+
+  // Descobre se o servidor tem IA configurada. Se não, usa OCR local (grátis).
+  useEffect(() => {
+    api
+      .saude()
+      .then((s) => setUsarIA(s.ia))
+      .catch(() => setUsarIA(false));
+  }, []);
 
   async function aoEscolher(e: React.ChangeEvent<HTMLInputElement>) {
     const ficheiro = e.target.files?.[0];
     if (!ficheiro) return;
     setErro(null);
+    setProgresso(0);
 
     try {
       setEstado("a_comprimir");
@@ -27,21 +41,25 @@ export default function ScanTalao({ onExtraido, onFechar }: Props) {
       setPreview(url);
 
       setEstado("a_ler");
-      const dados = await api.lerTalao(comprimida);
+      const nomes = categorias.map((c) => c.nome);
+      const dados = usarIA
+        ? await api.lerTalao(comprimida)
+        : await lerTalaoLocal(comprimida, nomes, (p) => setProgresso(p));
+
       onExtraido(dados, url);
     } catch (err: any) {
       setEstado("erro");
       setErro(
         err?.message ||
-          "Falha ao ler o talão. Verifica a ligação à internet ou introduz manualmente."
+          "Não foi possível ler o talão. Tenta outra foto ou introduz manualmente."
       );
     } finally {
-      // permite escolher o mesmo ficheiro outra vez
       if (inputRef.current) inputRef.current.value = "";
     }
   }
 
   const aProcessar = estado === "a_comprimir" || estado === "a_ler";
+  const pctOCR = estado === "a_ler" && !usarIA ? ` ${Math.round(progresso * 100)}%` : "";
 
   return (
     <div className="space-y-4">
@@ -54,7 +72,6 @@ export default function ScanTalao({ onExtraido, onFechar }: Props) {
         onChange={aoEscolher}
       />
 
-      {/* Área de captura */}
       <button
         onClick={() => inputRef.current?.click()}
         disabled={aProcessar}
@@ -63,13 +80,9 @@ export default function ScanTalao({ onExtraido, onFechar }: Props) {
           text-center transition hover:border-marca-400 disabled:opacity-60"
       >
         {preview ? (
-          <img
-            src={preview}
-            alt="Pré-visualização do talão"
-            className="max-h-44 rounded-xl object-contain"
-          />
+          <img src={preview} alt="Pré-visualização do talão" className="max-h-44 rounded-xl object-contain" />
         ) : (
-          <span className="grid h-16 w-16 place-items-center rounded-full bg-marca-500/15 text-marca-300">
+          <span className="grid h-16 w-16 place-items-center rounded-full bg-marca-500/15 text-marcatxt">
             <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
               <path
                 d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.2c.5 0 .96-.27 1.2-.7l.5-.86A1.5 1.5 0 0 1 10.6 3.7h2.8a1.5 1.5 0 0 1 1.3.74l.5.86c.24.43.7.7 1.2.7h1.1A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-8Z"
@@ -88,12 +101,15 @@ export default function ScanTalao({ onExtraido, onFechar }: Props) {
         </span>
       </button>
 
-      {/* Estado de leitura */}
       {aProcessar && (
-        <div className="flex items-center justify-center gap-3 rounded-2xl bg-noite-900/60 px-4 py-3 text-marca-200">
+        <div className="flex items-center justify-center gap-3 rounded-2xl bg-noite-900/60 px-4 py-3 text-marcatxt">
           <span className="h-5 w-5 animate-spin rounded-full border-2 border-marca-400 border-t-transparent" />
           <span className="text-sm font-medium">
-            {estado === "a_comprimir" ? "A preparar a imagem…" : "A ler o talão com IA…"}
+            {estado === "a_comprimir"
+              ? "A preparar a imagem…"
+              : usarIA
+              ? "A ler o talão com IA…"
+              : `A ler o talão no telemóvel…${pctOCR}`}
           </span>
         </div>
       )}
@@ -105,9 +121,11 @@ export default function ScanTalao({ onExtraido, onFechar }: Props) {
       )}
 
       <p className="text-center text-xs text-slate-500">
-        A IA extrai valor, loja, data e sugere a categoria. Confirmas tudo antes de gravar.
+        {usarIA === false
+          ? "Leitura feita no teu telemóvel (grátis). Extrai valor, data e loja — confirmas tudo antes de gravar. Na 1.ª vez descarrega o idioma (precisa de internet uma vez)."
+          : "A IA extrai valor, loja, data e sugere a categoria. Confirmas tudo antes de gravar."}
         <br />
-        Nota: a leitura precisa de internet (e, no iPhone, a câmara exige HTTPS).
+        Nota: no iPhone, a câmara exige HTTPS.
       </p>
 
       <button className="botao-secundario w-full" onClick={onFechar} disabled={aProcessar}>

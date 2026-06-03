@@ -87,7 +87,7 @@ export default function NovaDespesa({ categorias, membros, onGuardado, variante 
       )}
 
       <Modal titulo="Fotografar talão" aberto={vista === "scan"} onFechar={fechar}>
-        <ScanTalao onExtraido={aoExtrair} onFechar={fechar} />
+        <ScanTalao categorias={categorias} onExtraido={aoExtrair} onFechar={fechar} />
         <div className="mt-3 text-center">
           <button className="text-sm text-slate-400 underline" onClick={abrirManual}>
             Prefiro introduzir manualmente

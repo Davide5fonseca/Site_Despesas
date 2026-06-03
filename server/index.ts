@@ -4,14 +4,15 @@ import cors from "cors";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { migrate } from "./db.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { migrate, obterFamiliaPorCodigo } from "./db.js";
 import { despesasRouter } from "./routes/despesas.js";
 import { categoriasRouter } from "./routes/categorias.js";
 import { membrosRouter } from "./routes/membros.js";
 import { resumoRouter } from "./routes/resumo.js";
 import { talaoRouter } from "./routes/talao.js";
+import { familiasRouter } from "./routes/familias.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 migrate();
 
@@ -25,11 +26,25 @@ app.get("/api/saude", (_req, res) =>
   res.json({ ok: true, ia: Boolean(process.env.ANTHROPIC_API_KEY) })
 );
 
-app.use("/api/despesas", despesasRouter);
-app.use("/api/categorias", categoriasRouter);
-app.use("/api/membros", membrosRouter);
-app.use("/api/resumo", resumoRouter);
-app.use("/api/talao", talaoRouter);
+// Criar/entrar numa família NÃO exige família prévia.
+app.use("/api/familias", familiasRouter);
+
+// Middleware de scoping: resolve o código (cabeçalho x-familia-codigo) -> familia_id.
+// Todas as rotas de dados ficam restritas à família do utilizador.
+function exigirFamilia(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const codigo = req.header("x-familia-codigo");
+  if (!codigo) return res.status(401).json({ erro: "Sem família. Cria ou entra numa família." });
+  const familia = obterFamiliaPorCodigo(codigo);
+  if (!familia) return res.status(401).json({ erro: "Código de família inválido." });
+  (req as any).familiaId = familia.id;
+  next();
+}
+
+app.use("/api/despesas", exigirFamilia, despesasRouter);
+app.use("/api/categorias", exigirFamilia, categoriasRouter);
+app.use("/api/membros", exigirFamilia, membrosRouter);
+app.use("/api/resumo", exigirFamilia, resumoRouter);
+app.use("/api/talao", exigirFamilia, talaoRouter);
 
 // ─────────────────────────────────────────────────────────────────────────
 // Servir o frontend compilado (Opção A: tudo num só serviço).

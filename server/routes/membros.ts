@@ -9,21 +9,23 @@ const MembroInput = z.object({
 });
 
 // GET /api/membros
-membrosRouter.get("/", (_req, res) => {
+membrosRouter.get("/", (req, res) => {
+  const familiaId = (req as any).familiaId as number;
   const linhas = db
-    .prepare("SELECT id, nome FROM membros ORDER BY nome COLLATE NOCASE")
-    .all();
+    .prepare("SELECT id, nome FROM membros WHERE familia_id = ? ORDER BY nome COLLATE NOCASE")
+    .all(familiaId);
   res.json(linhas);
 });
 
 // POST /api/membros
 membrosRouter.post("/", (req, res) => {
+  const familiaId = (req as any).familiaId as number;
   const parsed = MembroInput.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ erro: parsed.error.flatten() });
-  }
+  if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
   try {
-    const info = db.prepare("INSERT INTO membros (nome) VALUES (?)").run(parsed.data.nome);
+    const info = db
+      .prepare("INSERT INTO membros (familia_id, nome) VALUES (?, ?)")
+      .run(familiaId, parsed.data.nome);
     const novo = db.prepare("SELECT id, nome FROM membros WHERE id = ?").get(info.lastInsertRowid);
     res.status(201).json(novo);
   } catch (e: any) {
@@ -36,8 +38,11 @@ membrosRouter.post("/", (req, res) => {
 
 // DELETE /api/membros/:id
 membrosRouter.delete("/:id", (req, res) => {
+  const familiaId = (req as any).familiaId as number;
   const id = Number(req.params.id);
-  const info = db.prepare("DELETE FROM membros WHERE id = ?").run(id);
+  const info = db
+    .prepare("DELETE FROM membros WHERE id = ? AND familia_id = ?")
+    .run(id, familiaId);
   if (info.changes === 0) return res.status(404).json({ erro: "Não encontrado" });
   res.status(204).end();
 });

@@ -24,7 +24,7 @@ export default function Filtros({ mes, onMes, categorias, categoria, onCategoria
         <button
           onClick={() => onMes(deslocarMes(mes, -1))}
           aria-label="Mês anterior"
-          className="rounded-xl p-2.5 text-slate-300 hover:bg-white/5"
+          className="rounded-xl p-2.5 text-slate-300 hover:bg-linha/5"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -34,7 +34,7 @@ export default function Filtros({ mes, onMes, categorias, categoria, onCategoria
         <button
           onClick={() => onMes(deslocarMes(mes, 1))}
           aria-label="Mês seguinte"
-          className="rounded-xl p-2.5 text-slate-300 hover:bg-white/5"
+          className="rounded-xl p-2.5 text-slate-300 hover:bg-linha/5"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -79,7 +79,7 @@ function Chip({
       className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
         ativo
           ? "border-transparent bg-marca-500 text-white"
-          : "border-white/10 bg-noite-800/60 text-slate-300 hover:bg-noite-700"
+          : "border-linha/10 bg-noite-800/60 text-slate-300 hover:bg-noite-700"
       }`}
     >
       <span className="h-2 w-2 rounded-full" style={{ backgroundColor: cor }} />

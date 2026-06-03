@@ -2,8 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Tokens de tema ─────────────────────────────────────────────────────── */
+/* Valores em RGB separados por espaços, para usar com rgb(var(--x) / alpha). */
 :root {
-  color-scheme: dark;
+  /* TEMA ESCURO (por omissão) */
+  --noite-900: 11 17 32;
+  --noite-800: 17 26 46;
+  --noite-700: 27 38 63;
+  --noite-600: 39 50 79;
+
+  --slate-100: 241 245 249;
+  --slate-200: 226 232 240;
+  --slate-300: 203 213 225;
+  --slate-400: 148 163 184;
+  --slate-500: 100 116 139;
+  --slate-600: 71 85 105;
+
+  --linha: 255 255 255;
+  --marca-txt: 95 217 195; /* marca-300 */
+
+  --tinta-marca: 20 160 138;
+  --brilho: 0.12;
+}
+
+:root.light {
+  /* TEMA CLARO */
+  --noite-900: 240 244 250; /* fundo da página */
+  --noite-800: 255 255 255; /* cartões / superfícies */
+  --noite-700: 226 232 240; /* superfície secundária */
+  --noite-600: 203 213 225; /* hover */
+
+  --slate-100: 15 23 42; /* texto principal */
+  --slate-200: 30 41 59;
+  --slate-300: 51 65 85;
+  --slate-400: 71 85 105; /* texto secundário */
+  --slate-500: 100 116 139;
+  --slate-600: 148 163 184; /* texto ténue */
+
+  --linha: 15 23 42; /* bordas/overlays escuros sobre claro */
+  --marca-txt: 15 118 110; /* marca-600 */
+
+  --tinta-marca: 20 160 138;
+  --brilho: 0.1;
 }
 
 html,
@@ -14,21 +54,25 @@ body,
 
 body {
   margin: 0;
-  background-color: theme("colors.noite.900");
+  background-color: rgb(var(--noite-900));
   background-image: radial-gradient(
-      1200px 600px at 50% -10%,
-      rgba(20, 160, 138, 0.12),
-      transparent 60%
-    );
-  color: #e2e8f0;
+    1200px 600px at 50% -10%,
+    rgb(var(--tinta-marca) / var(--brilho)),
+    transparent 60%
+  );
+  color: rgb(var(--slate-200));
   -webkit-font-smoothing: antialiased;
-  /* Respeita as áreas seguras do telemóvel (notch / barra inferior) */
   padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+:root.light body {
+  box-shadow: none;
 }
 
 @layer components {
   .cartao {
-    @apply rounded-xl2 bg-noite-800/80 border border-white/5 shadow-cartao;
+    @apply rounded-xl2 bg-noite-800/80 border border-linha/10 shadow-cartao;
   }
 
   .botao {
@@ -42,7 +86,7 @@ body {
   }
 
   .botao-secundario {
-    @apply botao bg-noite-700 text-slate-100 hover:bg-noite-600 border border-white/5;
+    @apply botao bg-noite-700 text-slate-100 hover:bg-noite-600 border border-linha/10;
   }
 
   .botao-perigo {
@@ -50,7 +94,7 @@ body {
   }
 
   .campo {
-    @apply w-full rounded-2xl bg-noite-900/70 border border-white/10 px-4 py-3
+    @apply w-full rounded-2xl bg-noite-900/70 border border-linha/15 px-4 py-3
       text-base text-slate-100 placeholder:text-slate-500
       focus:outline-none focus:ring-2 focus:ring-marca-400 focus:border-transparent;
   }

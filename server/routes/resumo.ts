@@ -3,20 +3,20 @@ import { db } from "../db.js";
 
 export const resumoRouter = Router();
 
-// Constrói as N chaves de mês ('YYYY-MM') a terminar em `mes` (inclusive).
 function ultimosMeses(mes: string, n: number): string[] {
   const [ano, m] = mes.split("-").map(Number);
   const out: string[] = [];
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(ano, m - 1 - i, 1);
-    const chave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    out.push(chave);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   }
   return out;
 }
 
 // GET /api/resumo?mes=YYYY-MM
 resumoRouter.get("/", (req, res) => {
+  const familiaId = (req as any).familiaId as number;
+
   let mes = req.query.mes as string | undefined;
   if (!mes || !/^\d{4}-\d{2}$/.test(mes)) {
     const agora = new Date();
@@ -24,14 +24,14 @@ resumoRouter.get("/", (req, res) => {
   }
   const padrao = `${mes}-%`;
 
-  // Total do mês
   const total = (
     db
-      .prepare("SELECT COALESCE(SUM(valor_centimos), 0) AS total FROM despesas WHERE data LIKE ?")
-      .get(padrao) as { total: number }
+      .prepare(
+        "SELECT COALESCE(SUM(valor_centimos), 0) AS total FROM despesas WHERE familia_id = ? AND data LIKE ?"
+      )
+      .get(familiaId, padrao) as { total: number }
   ).total;
 
-  // Por categoria (inclui sem categoria)
   const porCategoria = db
     .prepare(
       `SELECT
@@ -41,13 +41,12 @@ resumoRouter.get("/", (req, res) => {
          SUM(d.valor_centimos)             AS total
        FROM despesas d
        LEFT JOIN categorias c ON c.id = d.categoria_id
-       WHERE d.data LIKE ?
+       WHERE d.familia_id = ? AND d.data LIKE ?
        GROUP BY d.categoria_id
        ORDER BY total DESC`
     )
-    .all(padrao);
+    .all(familiaId, padrao);
 
-  // Por pessoa
   const porPessoa = db
     .prepare(
       `SELECT
@@ -56,20 +55,19 @@ resumoRouter.get("/", (req, res) => {
          SUM(d.valor_centimos)          AS total
        FROM despesas d
        LEFT JOIN membros m ON m.id = d.membro_id
-       WHERE d.data LIKE ?
+       WHERE d.familia_id = ? AND d.data LIKE ?
        GROUP BY d.membro_id
        ORDER BY total DESC`
     )
-    .all(padrao);
+    .all(familiaId, padrao);
 
-  // Evolução dos últimos 6 meses
   const meses = ultimosMeses(mes, 6);
   const somaPorMes = db.prepare(
-    "SELECT COALESCE(SUM(valor_centimos), 0) AS total FROM despesas WHERE data LIKE ?"
+    "SELECT COALESCE(SUM(valor_centimos), 0) AS total FROM despesas WHERE familia_id = ? AND data LIKE ?"
   );
   const evolucao = meses.map((chave) => ({
     mes: chave,
-    total: (somaPorMes.get(`${chave}-%`) as { total: number }).total,
+    total: (somaPorMes.get(familiaId, `${chave}-%`) as { total: number }).total,
   }));
 
   res.json({ mes, total, porCategoria, porPessoa, evolucao });

@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import Resumo from "./pages/Resumo";
 import Movimentos from "./pages/Movimentos";
 import Definicoes from "./pages/Definicoes";
+import FamiliaGate from "./components/FamiliaGate";
+import { Familia, getFamilia } from "./api/client";
 
 const itensNav = [
   { para: "/resumo", rotulo: "Resumo", Icone: IconeGrafico },
@@ -10,6 +13,13 @@ const itensNav = [
 ];
 
 export default function App() {
+  const [familia, setFamiliaState] = useState<Familia | null>(getFamilia());
+
+  // Sem família escolhida -> ecrã de criar/entrar.
+  if (!familia) {
+    return <FamiliaGate onPronto={setFamiliaState} />;
+  }
+
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col">
       <main className="flex-1 px-4 pb-28 pt-5">
@@ -24,7 +34,7 @@ export default function App() {
 
       {/* Navegação inferior fixa, estilo app nativa */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-noite-800/95 backdrop-blur"
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-linha/10 bg-noite-800/95 backdrop-blur"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="mx-auto flex max-w-md items-stretch justify-around">
@@ -34,7 +44,7 @@ export default function App() {
               to={para}
               className={({ isActive }) =>
                 `flex flex-1 flex-col items-center gap-1 py-3 text-xs font-medium transition ${
-                  isActive ? "text-marca-300" : "text-slate-500"
+                  isActive ? "text-marcatxt" : "text-slate-500"
                 }`
               }
             >

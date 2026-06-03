@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, Categoria, Membro } from "../api/client";
+import { api, Categoria, Membro, getFamilia, setFamilia } from "../api/client";
+import BotaoTema from "../components/BotaoTema";
 
 const CORES = [
   "#16a34a", "#7c3aed", "#0ea5e9", "#f59e0b",
@@ -63,12 +64,54 @@ export default function Definicoes() {
     carregar();
   }
 
+  const familia = getFamilia();
+
+  function copiarCodigo() {
+    if (familia) navigator.clipboard?.writeText(familia.codigo).catch(() => {});
+  }
+  function sairDaFamilia() {
+    if (!confirm("Sair desta família neste dispositivo? Vais voltar ao ecrã inicial.")) return;
+    setFamilia(null);
+    location.reload();
+  }
+
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-100">Definições</h1>
-        <p className="text-sm text-slate-400">Membros da casa e categorias de despesa.</p>
+        <p className="text-sm text-slate-400">Família, aparência, membros e categorias.</p>
       </header>
+
+      {/* Família */}
+      {familia && (
+        <section className="cartao p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            A tua família
+          </h2>
+          <p className="text-lg font-bold text-slate-100">{familia.nome}</p>
+          <p className="mt-3 text-xs text-slate-400">Código para outros entrarem:</p>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="flex-1 rounded-xl border border-dashed border-marca-500/40 bg-noite-900/50 py-2 text-center text-xl font-extrabold tracking-[0.25em] text-slate-100">
+              {familia.codigo}
+            </span>
+            <button className="botao-secundario px-4 py-2.5" onClick={copiarCodigo}>
+              Copiar
+            </button>
+          </div>
+          <button className="botao-perigo mt-4 w-full" onClick={sairDaFamilia}>
+            Sair desta família
+          </button>
+        </section>
+      )}
+
+      {/* Aparência */}
+      <section className="cartao flex items-center justify-between p-5">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Aparência</h2>
+          <p className="mt-1 text-sm text-slate-300">Alternar entre tema claro e escuro.</p>
+        </div>
+        <BotaoTema comRotulo />
+      </section>
 
       {erro && (
         <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
@@ -145,7 +188,7 @@ export default function Definicoes() {
                 onClick={() => setNovaCor(cor)}
                 aria-label={`Cor ${cor}`}
                 className={`h-8 w-8 rounded-full transition ${
-                  novaCor === cor ? "ring-2 ring-white ring-offset-2 ring-offset-noite-800" : ""
+                  novaCor === cor ? "ring-2 ring-marca-400 ring-offset-2 ring-offset-noite-800" : ""
                 }`}
                 style={{ backgroundColor: cor }}
               />

@@ -3,6 +3,34 @@
 // em produção). Para um backend remoto define VITE_API_URL.
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
 
+// ──────────────────────── Família (multi-casa) ───────────────────
+export interface Familia {
+  id: number;
+  codigo: string;
+  nome: string;
+}
+
+const FAMILIA_KEY = "despesas_familia";
+
+export function getFamilia(): Familia | null {
+  try {
+    const raw = localStorage.getItem(FAMILIA_KEY);
+    return raw ? (JSON.parse(raw) as Familia) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setFamilia(f: Familia | null) {
+  if (f) localStorage.setItem(FAMILIA_KEY, JSON.stringify(f));
+  else localStorage.removeItem(FAMILIA_KEY);
+}
+
+function cabecalhoFamilia(): Record<string, string> {
+  const f = getFamilia();
+  return f ? { "x-familia-codigo": f.codigo } : {};
+}
+
 // ───────────────────────────── Tipos ─────────────────────────────
 export interface Membro {
   id: number;
@@ -64,8 +92,12 @@ export interface TalaoExtraido {
 // ───────────────────────────── Núcleo ─────────────────────────────
 async function pedir<T>(caminho: string, opcoes?: RequestInit): Promise<T> {
   const resposta = await fetch(`${BASE}${caminho}`, {
-    headers: { "Content-Type": "application/json" },
     ...opcoes,
+    headers: {
+      "Content-Type": "application/json",
+      ...cabecalhoFamilia(),
+      ...(opcoes?.headers || {}),
+    },
   });
   if (!resposta.ok) throw await erroDe(resposta);
   if (resposta.status === 204) return undefined as T;
@@ -89,6 +121,22 @@ async function erroDe(resposta: Response): Promise<Error> {
 
 // ───────────────────────────── API ─────────────────────────────
 export const api = {
+  // Estado do servidor (ia=true se a leitura por IA estiver configurada)
+  saude() {
+    return pedir<{ ok: boolean; ia: boolean }>("/saude");
+  },
+
+  // Família
+  criarFamilia(nome: string) {
+    return pedir<Familia>("/familias", { method: "POST", body: JSON.stringify({ nome }) });
+  },
+  entrarFamilia(codigo: string) {
+    return pedir<Familia>("/familias/entrar", {
+      method: "POST",
+      body: JSON.stringify({ codigo: codigo.trim().toUpperCase() }),
+    });
+  },
+
   // Despesas
   listarDespesas(filtros: { mes?: string; categoria?: number | null } = {}) {
     const q = new URLSearchParams();
@@ -138,7 +186,11 @@ export const api = {
   async lerTalao(imagem: Blob): Promise<TalaoExtraido> {
     const fd = new FormData();
     fd.append("imagem", imagem, "talao.jpg");
-    const resposta = await fetch(`${BASE}/talao/ler`, { method: "POST", body: fd });
+    const resposta = await fetch(`${BASE}/talao/ler`, {
+      method: "POST",
+      headers: { ...cabecalhoFamilia() },
+      body: fd,
+    });
     if (!resposta.ok) throw await erroDe(resposta);
     return resposta.json() as Promise<TalaoExtraido>;
   },

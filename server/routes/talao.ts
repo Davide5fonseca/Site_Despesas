@@ -34,11 +34,12 @@ talaoRouter.post("/ler", (req, res) => {
     }
 
     try {
-      // Lista de categorias existentes para a IA escolher de entre elas.
+      const familiaId = (req as any).familiaId as number;
+      // Lista de categorias da família para a IA escolher de entre elas.
       const categorias = (
-        db.prepare("SELECT nome FROM categorias ORDER BY nome COLLATE NOCASE").all() as Array<{
-          nome: string;
-        }>
+        db
+          .prepare("SELECT nome FROM categorias WHERE familia_id = ? ORDER BY nome COLLATE NOCASE")
+          .all(familiaId) as Array<{ nome: string }>
       ).map((c) => c.nome);
 
       const base64 = ficheiro.buffer.toString("base64");

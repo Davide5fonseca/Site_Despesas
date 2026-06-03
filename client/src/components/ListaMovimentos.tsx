@@ -73,7 +73,7 @@ export default function ListaMovimentos({ despesas, categorias, membros, onAlter
                   {d.origem === "talao" && (
                     <span
                       title="Registado por foto de talão"
-                      className="shrink-0 rounded-md bg-marca-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-marca-300"
+                      className="shrink-0 rounded-md bg-marca-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-marcatxt"
                     >
                       IA
                     </span>

@@ -50,7 +50,7 @@ export default function Resumo() {
         <button
           onClick={() => setMes(deslocarMes(mes, -1))}
           aria-label="Mês anterior"
-          className="rounded-xl p-2.5 text-slate-300 hover:bg-white/5"
+          className="rounded-xl p-2.5 text-slate-300 hover:bg-linha/5"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -60,7 +60,7 @@ export default function Resumo() {
         <button
           onClick={() => setMes(deslocarMes(mes, 1))}
           aria-label="Mês seguinte"
-          className="rounded-xl p-2.5 text-slate-300 hover:bg-white/5"
+          className="rounded-xl p-2.5 text-slate-300 hover:bg-linha/5"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
