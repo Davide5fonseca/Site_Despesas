@@ -101,31 +101,40 @@ export default function Inicio() {
         style={{ marginTop: "calc(-1 * (env(safe-area-inset-top) + 1.25rem))" }}
       >
         <section
-          className="rounded-b-[2rem] bg-gradient-to-b from-marca-500 to-marca-700 px-5 pb-14 text-white"
-          style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.1rem)" }}
+          className="relative overflow-hidden rounded-b-[2.25rem] bg-gradient-to-br from-marca-400 via-marca-600 to-marca-700 px-5 pb-12 text-white"
+          style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}
         >
+          {/* Brilhos decorativos */}
+          <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/15 blur-2xl" aria-hidden />
+          <div className="pointer-events-none absolute -left-10 bottom-0 h-40 w-40 rounded-full bg-black/15 blur-2xl" aria-hidden />
+
           {/* Topo: família + navegação de mês */}
-          <div className="flex items-center justify-between text-sm">
-            <span className="font-semibold text-white/90">{familia?.nome ?? "A nossa casa"}</span>
-            <div className="flex items-center gap-1">
+          <div className="relative flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-white/20 text-xs font-bold">
+                {(familia?.nome ?? "C").charAt(0).toUpperCase()}
+              </span>
+              <span className="text-sm font-semibold text-white/95">{familia?.nome ?? "A nossa casa"}</span>
+            </span>
+            <div className="flex items-center gap-0.5 rounded-full bg-white/10 p-0.5">
               <button
                 onClick={() => setMes(deslocarMes(mes, -1))}
                 aria-label="Mês anterior"
-                className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/15 active:scale-90"
+                className="rounded-full p-1.5 text-white/85 transition hover:bg-white/15 active:scale-90"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
                   <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
                 </svg>
               </button>
-              <span className="min-w-[92px] text-center text-xs font-medium text-white/90">
+              <span className="min-w-[84px] text-center text-xs font-semibold text-white/95">
                 {formatarMes(mes)}
               </span>
               <button
                 onClick={() => setMes(deslocarMes(mes, 1))}
                 aria-label="Mês seguinte"
-                className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/15 active:scale-90"
+                className="rounded-full p-1.5 text-white/85 transition hover:bg-white/15 active:scale-90"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
                   <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
                 </svg>
               </button>
@@ -133,11 +142,15 @@ export default function Inicio() {
           </div>
 
           {/* Total do mês */}
-          <div className="mt-6 text-center">
-            <p className="text-[44px] font-extrabold leading-none tracking-tight tabular-nums">
+          <div className="relative mt-7 text-center">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-white/65">Gasto este mês</p>
+            <p className="mt-1.5 text-[52px] font-black leading-none tracking-tight tabular-nums drop-shadow-sm">
               {carregando ? "—" : formatarEuros(totalMes)}
             </p>
-            <p className="mt-2 text-sm text-white/75">Gasto este mês</p>
+            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white/90 backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-white/90" />
+              {despesas.length} {despesas.length === 1 ? "despesa" : "despesas"}
+            </div>
           </div>
         </section>
 

@@ -139,6 +139,13 @@ export default function NovaDespesa({ categorias, membros, onGuardado, variante 
   );
 }
 
+const chipIcone = (destaque: boolean) =>
+  `grid h-12 w-12 place-items-center rounded-2xl transition-transform group-active:scale-90 ${
+    destaque
+      ? "bg-gradient-to-b from-marca-400 to-marca-600 text-white shadow-md shadow-marca-900/30"
+      : "bg-marca-500/12 text-marcatxt"
+  }`;
+
 function CartaoAcao({
   label,
   onClick,
@@ -153,16 +160,10 @@ function CartaoAcao({
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center gap-2 rounded-2xl border border-linha/5 bg-noite-800 p-3 shadow-cartao transition active:scale-95"
+      className="cartao group flex flex-col items-center gap-2 px-3 pb-4 pt-10 transition active:scale-95"
     >
-      <span
-        className={`grid h-11 w-11 place-items-center rounded-xl ${
-          destaque ? "bg-marca-500 text-white" : "bg-marca-500/12 text-marcatxt"
-        }`}
-      >
-        {children}
-      </span>
-      <span className="text-xs font-semibold text-slate-200">{label}</span>
+      <span className={chipIcone(destaque)}>{children}</span>
+      <span className="text-[13px] font-semibold text-slate-200">{label}</span>
     </button>
   );
 }
@@ -177,14 +178,9 @@ function CartaoAcaoLink({
   children: React.ReactNode;
 }) {
   return (
-    <NavLink
-      to={to}
-      className="flex flex-col items-center gap-2 rounded-2xl border border-linha/5 bg-noite-800 p-3 shadow-cartao transition active:scale-95"
-    >
-      <span className="grid h-11 w-11 place-items-center rounded-xl bg-marca-500/12 text-marcatxt">
-        {children}
-      </span>
-      <span className="text-xs font-semibold text-slate-200">{label}</span>
+    <NavLink to={to} className="cartao group flex flex-col items-center gap-2 px-3 pb-4 pt-10 transition active:scale-95">
+      <span className={chipIcone(false)}>{children}</span>
+      <span className="text-[13px] font-semibold text-slate-200">{label}</span>
     </NavLink>
   );
 }

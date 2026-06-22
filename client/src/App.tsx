@@ -24,7 +24,7 @@ export default function App() {
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col overflow-x-hidden">
       <main
-        className="flex-1 px-4 pb-28"
+        className="flex-1 px-4 pb-32"
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}
       >
         <Routes>
@@ -37,25 +37,29 @@ export default function App() {
         </Routes>
       </main>
 
-      {/* Navegação inferior — estilo app de banco (ativo em círculo verde) */}
+      {/* Navegação inferior flutuante */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-linha/10 bg-noite-800/95 backdrop-blur-lg"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -8px 24px -18px rgba(0,0,0,0.4)" }}
+        className="fixed inset-x-0 bottom-0 z-20 px-3"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.6rem)" }}
       >
-        <div className="mx-auto flex max-w-md items-stretch justify-around px-2 py-1.5">
+        <div className="mx-auto flex max-w-md items-stretch justify-around rounded-[1.6rem] border border-linha/10 bg-noite-800/90 px-1.5 py-1.5 backdrop-blur-xl shadow-[0_16px_44px_-14px_rgba(0,0,0,0.6)]">
           {itensNav.map(({ para, rotulo, Icone }) => (
             <NavLink key={para} to={para} className="flex flex-1 flex-col items-center gap-1 py-1">
               {({ isActive }) => (
                 <>
                   <span
-                    className={`grid h-11 w-11 place-items-center rounded-2xl transition-all duration-200 ${
-                      isActive ? "bg-marca-500 text-white shadow-lg shadow-marca-900/30" : "text-slate-500"
+                    className={`grid h-10 w-10 place-items-center rounded-2xl transition-all duration-200 ${
+                      isActive
+                        ? "bg-gradient-to-b from-marca-400 to-marca-600 text-white shadow-lg shadow-marca-500/40"
+                        : "text-slate-500"
                     }`}
                   >
                     <Icone activo={isActive} />
                   </span>
                   <span
-                    className={`text-[11px] font-semibold ${isActive ? "text-marcatxt" : "text-slate-500"}`}
+                    className={`text-[11px] font-semibold transition-colors ${
+                      isActive ? "text-marcatxt" : "text-slate-500"
+                    }`}
                   >
                     {rotulo}
                   </span>

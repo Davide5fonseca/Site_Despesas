@@ -148,7 +148,10 @@ export default function Definicoes() {
               Copiar
             </button>
           </div>
-          <button className="botao-perigo mt-4 w-full" onClick={sairDaFamilia}>
+          <button
+            className="mt-4 w-full rounded-2xl border border-red-500/30 bg-red-500/10 py-3 text-sm font-semibold text-red-400 transition hover:bg-red-500/20 active:scale-[0.99]"
+            onClick={sairDaFamilia}
+          >
             Sair desta família
           </button>
         </section>

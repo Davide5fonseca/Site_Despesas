@@ -86,19 +86,19 @@ export default function ListaMovimentos({ despesas, categorias, membros, onAlter
                 {formatarEuros(g.total)}
               </span>
             </div>
-            <ul className="overflow-hidden rounded-xl2 border border-linha/5 bg-noite-800/50">
+            <ul className="cartao overflow-hidden">
               {g.items.map((d, i) => (
                 <li
                   key={d.id}
                   className={`flex items-center gap-3 px-3 py-2.5 ${
-                    i > 0 ? "border-t border-linha/5" : ""
+                    i > 0 ? "border-t border-linha/[0.06]" : ""
                   }`}
                 >
                   <button onClick={() => setAEditar(d)} className="flex flex-1 items-center gap-3 text-left">
                     <span
-                      className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-sm font-bold ring-1 ring-inset ring-linha/10"
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-sm font-bold ring-1 ring-inset ring-linha/10"
                       style={{
-                        backgroundColor: (d.categoria_cor ?? "#475569") + "22",
+                        backgroundColor: (d.categoria_cor ?? "#475569") + "26",
                         color: d.categoria_cor ?? "#94a3b8",
                       }}
                     >
@@ -106,7 +106,7 @@ export default function ListaMovimentos({ despesas, categorias, membros, onAlter
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="truncate font-semibold text-slate-100">
+                        <p className="truncate text-[15px] font-semibold text-slate-100">
                           {d.descricao || d.categoria_nome || "Despesa"}
                         </p>
                         {d.origem === "talao" && (
@@ -118,11 +118,11 @@ export default function ListaMovimentos({ despesas, categorias, membros, onAlter
                           </span>
                         )}
                       </div>
-                      <p className="truncate text-xs text-slate-400">
+                      <p className="mt-0.5 truncate text-xs text-slate-400">
                         {[d.categoria_nome, d.membro_nome].filter(Boolean).join(" · ") || "Sem categoria"}
                       </p>
                     </div>
-                    <span className="shrink-0 font-bold tabular-nums text-slate-100">
+                    <span className="shrink-0 text-[15px] font-bold tabular-nums text-slate-100">
                       {formatarEuros(d.valor_centimos)}
                     </span>
                   </button>
