@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { criarFamilia, obterFamiliaPorCodigo } from "../db.js";
+import { criarFamilia, obterFamiliaPorCodigo, ah } from "../db.js";
 
 export const familiasRouter = Router();
 
@@ -12,27 +12,36 @@ const EntrarInput = z.object({
 });
 
 // POST /api/familias  -> cria família + categorias iniciais, devolve o código
-familiasRouter.post("/", (req, res) => {
-  const parsed = CriarInput.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
-  const familia = criarFamilia(parsed.data.nome);
-  res.status(201).json(familia);
-});
+familiasRouter.post(
+  "/",
+  ah(async (req, res) => {
+    const parsed = CriarInput.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
+    const familia = await criarFamilia(parsed.data.nome);
+    res.status(201).json(familia);
+  })
+);
 
 // POST /api/familias/entrar  -> valida o código e devolve a família
-familiasRouter.post("/entrar", (req, res) => {
-  const parsed = EntrarInput.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
-  const familia = obterFamiliaPorCodigo(parsed.data.codigo);
-  if (!familia) return res.status(404).json({ erro: "Não existe nenhuma família com esse código." });
-  res.json(familia);
-});
+familiasRouter.post(
+  "/entrar",
+  ah(async (req, res) => {
+    const parsed = EntrarInput.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
+    const familia = await obterFamiliaPorCodigo(parsed.data.codigo);
+    if (!familia) return res.status(404).json({ erro: "Não existe nenhuma família com esse código." });
+    res.json(familia);
+  })
+);
 
 // GET /api/familias/atual  -> info da família atual (via cabeçalho x-familia-codigo)
-familiasRouter.get("/atual", (req, res) => {
-  const codigo = req.header("x-familia-codigo");
-  if (!codigo) return res.status(401).json({ erro: "Sem família." });
-  const familia = obterFamiliaPorCodigo(codigo);
-  if (!familia) return res.status(404).json({ erro: "Família não encontrada." });
-  res.json(familia);
-});
+familiasRouter.get(
+  "/atual",
+  ah(async (req, res) => {
+    const codigo = req.header("x-familia-codigo");
+    if (!codigo) return res.status(401).json({ erro: "Sem família." });
+    const familia = await obterFamiliaPorCodigo(codigo);
+    if (!familia) return res.status(404).json({ erro: "Família não encontrada." });
+    res.json(familia);
+  })
+);

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db } from "../db.js";
+import { q, um, ah, ERRO_UNICO } from "../db.js";
 
 export const membrosRouter = Router();
 
@@ -9,61 +9,75 @@ const MembroInput = z.object({
 });
 
 // GET /api/membros
-membrosRouter.get("/", (req, res) => {
-  const familiaId = (req as any).familiaId as number;
-  const linhas = db
-    .prepare("SELECT id, nome FROM membros WHERE familia_id = ? ORDER BY nome COLLATE NOCASE")
-    .all(familiaId);
-  res.json(linhas);
-});
+membrosRouter.get(
+  "/",
+  ah(async (req, res) => {
+    const familiaId = (req as any).familiaId as number;
+    const linhas = await q(
+      "SELECT id, nome FROM membros WHERE familia_id = $1 ORDER BY lower(nome)",
+      [familiaId]
+    );
+    res.json(linhas);
+  })
+);
 
 // POST /api/membros
-membrosRouter.post("/", (req, res) => {
-  const familiaId = (req as any).familiaId as number;
-  const parsed = MembroInput.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
-  try {
-    const info = db
-      .prepare("INSERT INTO membros (familia_id, nome) VALUES (?, ?)")
-      .run(familiaId, parsed.data.nome);
-    const novo = db.prepare("SELECT id, nome FROM membros WHERE id = ?").get(info.lastInsertRowid);
-    res.status(201).json(novo);
-  } catch (e: any) {
-    if (String(e.message).includes("UNIQUE")) {
-      return res.status(409).json({ erro: "Já existe um membro com esse nome" });
+membrosRouter.post(
+  "/",
+  ah(async (req, res) => {
+    const familiaId = (req as any).familiaId as number;
+    const parsed = MembroInput.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
+    try {
+      const novo = await um(
+        "INSERT INTO membros (familia_id, nome) VALUES ($1, $2) RETURNING id, nome",
+        [familiaId, parsed.data.nome]
+      );
+      res.status(201).json(novo);
+    } catch (e: any) {
+      if (e?.code === ERRO_UNICO) {
+        return res.status(409).json({ erro: "Já existe um membro com esse nome" });
+      }
+      throw e;
     }
-    throw e;
-  }
-});
+  })
+);
 
 // PUT /api/membros/:id  (renomear)
-membrosRouter.put("/:id", (req, res) => {
-  const familiaId = (req as any).familiaId as number;
-  const id = Number(req.params.id);
-  const parsed = MembroInput.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
-  try {
-    const info = db
-      .prepare("UPDATE membros SET nome = ? WHERE id = ? AND familia_id = ?")
-      .run(parsed.data.nome, id, familiaId);
-    if (info.changes === 0) return res.status(404).json({ erro: "Não encontrado" });
-    const atualizado = db.prepare("SELECT id, nome FROM membros WHERE id = ?").get(id);
-    res.json(atualizado);
-  } catch (e: any) {
-    if (String(e.message).includes("UNIQUE")) {
-      return res.status(409).json({ erro: "Já existe um membro com esse nome" });
+membrosRouter.put(
+  "/:id",
+  ah(async (req, res) => {
+    const familiaId = (req as any).familiaId as number;
+    const id = Number(req.params.id);
+    const parsed = MembroInput.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
+    try {
+      const atualizado = await um(
+        "UPDATE membros SET nome = $1 WHERE id = $2 AND familia_id = $3 RETURNING id, nome",
+        [parsed.data.nome, id, familiaId]
+      );
+      if (!atualizado) return res.status(404).json({ erro: "Não encontrado" });
+      res.json(atualizado);
+    } catch (e: any) {
+      if (e?.code === ERRO_UNICO) {
+        return res.status(409).json({ erro: "Já existe um membro com esse nome" });
+      }
+      throw e;
     }
-    throw e;
-  }
-});
+  })
+);
 
 // DELETE /api/membros/:id
-membrosRouter.delete("/:id", (req, res) => {
-  const familiaId = (req as any).familiaId as number;
-  const id = Number(req.params.id);
-  const info = db
-    .prepare("DELETE FROM membros WHERE id = ? AND familia_id = ?")
-    .run(id, familiaId);
-  if (info.changes === 0) return res.status(404).json({ erro: "Não encontrado" });
-  res.status(204).end();
-});
+membrosRouter.delete(
+  "/:id",
+  ah(async (req, res) => {
+    const familiaId = (req as any).familiaId as number;
+    const id = Number(req.params.id);
+    const apagado = await um(
+      "DELETE FROM membros WHERE id = $1 AND familia_id = $2 RETURNING id",
+      [id, familiaId]
+    );
+    if (!apagado) return res.status(404).json({ erro: "Não encontrado" });
+    res.status(204).end();
+  })
+);

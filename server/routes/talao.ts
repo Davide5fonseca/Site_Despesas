@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { db } from "../db.js";
+import { q } from "../db.js";
 import { lerTalao } from "../lib/anthropic.js";
 
 export const talaoRouter = Router();
@@ -37,9 +37,10 @@ talaoRouter.post("/ler", (req, res) => {
       const familiaId = (req as any).familiaId as number;
       // Lista de categorias da família para a IA escolher de entre elas.
       const categorias = (
-        db
-          .prepare("SELECT nome FROM categorias WHERE familia_id = ? ORDER BY nome COLLATE NOCASE")
-          .all(familiaId) as Array<{ nome: string }>
+        await q<{ nome: string }>(
+          "SELECT nome FROM categorias WHERE familia_id = $1 ORDER BY lower(nome)",
+          [familiaId]
+        )
       ).map((c) => c.nome);
 
       const base64 = ficheiro.buffer.toString("base64");

@@ -1,32 +1,24 @@
 # Blueprint do Render — UM ÚNICO serviço (Opção A).
 # O Express serve a API E o frontend compilado (client/dist) na mesma origem.
-# Resultado: 1 URL com HTTPS, sem CORS e sem VITE_API_URL.
+# A base de dados é Postgres EXTERNO (Neon/Supabase) -> já não é preciso disco,
+# e o plano gratuito do Render serve perfeitamente (os dados vivem no Postgres).
 #
 # Como usar: Render -> New -> Blueprint -> aponta ao repositório.
-# Depois define o valor secreto de ANTHROPIC_API_KEY no painel.
-#
-# NOTA: o disco persistente (para o SQLite não se perder) só existe em planos
-# PAGOS. Em plano gratuito remove o bloco "disk" e a env DB_PATH — mas atenção:
-# os dados são apagados a cada reinício/redeploy (só serve para testar).
+# Depois define os segredos DATABASE_URL e (opcional) ANTHROPIC_API_KEY no painel.
 services:
   - type: web
     name: despesas
     runtime: node
     rootDir: .
     region: frankfurt
-    plan: starter # disco persistente exige plano pago (starter ≈ 7$/mês)
-    # 1) instala+compila o frontend  2) instala o backend
+    plan: free
     buildCommand: npm --prefix client install && npm --prefix client run build && npm --prefix server install
     startCommand: npm --prefix server start
     healthCheckPath: /api/saude
-    disk:
-      name: dados
-      mountPath: /data
-      sizeGB: 1
     envVars:
+      - key: DATABASE_URL
+        sync: false # connection string do Neon/Supabase (secreto)
       - key: ANTHROPIC_API_KEY
-        sync: false # defines o valor (secreto) no painel do Render
-      - key: DB_PATH
-        value: /data/despesas.db
+        sync: false # opcional (sem isto, a leitura de talões usa OCR no telemóvel)
       - key: ANTHROPIC_MODEL
         value: claude-sonnet-4-6

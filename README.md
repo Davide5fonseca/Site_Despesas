@@ -11,14 +11,14 @@ Também há entrada manual.
 
 ```
 ┌──────────────┐      ┌────────────────────┐      ┌──────────────────────┐
-│  React + PWA │ ───▶ │ Express (API REST) │ ───▶ │ SQLite (better-sqlite3) │
+│  React + PWA │ ───▶ │ Express (API REST) │ ───▶ │ Postgres (Neon/Supabase) │
 │  (telemóvel) │      │  /api/talao/ler ───────────▶ Anthropic (visão)     │
 └──────────────┘      └────────────────────┘      └──────────────────────┘
 ```
 
 - **Frontend:** React 18 + Vite + TypeScript, Tailwind CSS, Recharts (donut + barras),
-  React Router (Resumo / Movimentos / Definições), `vite-plugin-pwa`.
-- **Backend:** Node.js + Express, SQLite via `better-sqlite3`, validação com Zod,
+  React Router (Resumo / Movimentos / Pessoas / Definições), `vite-plugin-pwa`.
+- **Backend:** Node.js + Express, **Postgres via `pg`**, validação com Zod,
   `@anthropic-ai/sdk` (leitura de talões), `multer` (upload da foto).
 - **Dinheiro guardado em cêntimos (inteiros)** — sem erros de vírgula flutuante.
 
@@ -34,11 +34,10 @@ Também há entrada manual.
 teste3/
 ├── server/                 # API + base de dados + IA
 │   ├── index.ts            # Express, rotas, CORS
-│   ├── db.ts               # SQLite + migrações + seed de categorias
+│   ├── db.ts               # Postgres (pg) + migrações + seed de categorias
 │   ├── lib/anthropic.ts    # cliente Anthropic + extração estruturada do talão
-│   ├── routes/             # despesas, categorias, membros, resumo, talao
-│   ├── .env.example        # → copia para .env e põe a chave
-│   └── despesas.db         # criada em runtime (ignorada no git)
+│   ├── routes/             # despesas, categorias, membros, resumo, saldos, talao, familias
+│   └── .env.example        # → copia para .env (DATABASE_URL + chave IA)
 └── client/                 # PWA React
     ├── src/
     │   ├── api/client.ts   # fetch tipado para a API
@@ -65,18 +64,27 @@ copy .env.example .env        # Windows (PowerShell/cmd)
 # cp .env.example .env        # macOS/Linux
 ```
 
-Edita `server/.env` e mete a tua chave:
+Edita `server/.env` e mete a **base de dados** (obrigatório) e, se quiseres, a chave de IA:
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...
+DATABASE_URL=postgres://utilizador:senha@host:5432/base?sslmode=require
+ANTHROPIC_API_KEY=        # opcional (ver abaixo)
 ```
 
-**Como obter a chave:** entra em <https://console.anthropic.com/> →
-*Settings* → *API Keys* → *Create Key*. (Precisas de créditos/cartão na conta.)
-A chave vive **só no servidor** — nunca é exposta ao frontend.
+**Base de dados (grátis, persistente):** cria um Postgres em
+**[Neon](https://neon.tech)** (recomendado) ou **[Supabase](https://supabase.com)**:
+1. Cria conta → novo projeto → copia a **Connection string** (Neon dá-a logo;
+   no Supabase é em *Project Settings → Database → Connection string → URI*).
+2. Cola-a em `DATABASE_URL`. As tabelas são criadas **automaticamente** no 1.º arranque.
 
-> Sem chave a app funciona à mesma; só a **leitura de talões por IA** fica
-> indisponível (a entrada manual continua a funcionar).
+> 💡 Para desenvolvimento sem conta na nuvem, podes correr um Postgres local com
+> Docker: `docker run -d -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=despesas -p 5433:5432 postgres:16`
+> e usar `DATABASE_URL=postgres://postgres:postgres@localhost:5433/despesas`.
+
+**Leitura de talões por IA (opcional):** mete `ANTHROPIC_API_KEY` (de
+<https://console.anthropic.com/> → *Settings → API Keys*). A chave vive **só no
+servidor**. **Sem chave a app funciona à mesma** — a leitura de talões passa a
+usar o **OCR do telemóvel** (grátis); a entrada manual também continua a funcionar.
 
 Arranca a API:
 
@@ -143,15 +151,19 @@ A PWA precisa de **HTTPS** para instalar no iPhone e para usar a câmara.
 ### 3.1 Tudo no Render — **um único serviço** (recomendado)
 
 O backend Express serve **a API e o frontend compilado** na mesma origem — por
-isso é só **1 URL**, sem CORS e sem `VITE_API_URL`. O ficheiro
-[`render.yaml`](render.yaml) na raiz já configura tudo (build do cliente +
-arranque do servidor, *health check*, disco e variáveis).
+isso é só **1 URL**, sem CORS e sem `VITE_API_URL`. Os dados ficam num **Postgres
+externo** (Neon/Supabase), por isso **persistem mesmo no plano gratuito** do Render
+(não é preciso disco). O ficheiro [`render.yaml`](render.yaml) já configura tudo.
 
-1. Põe o código num repositório Git (GitHub) — já tens `Davide5fonseca/teste3`.
-2. No [Render](https://render.com): **New → Blueprint** → escolhe o repositório.
+1. Cria a base de dados em **[Neon](https://neon.tech)** ou **Supabase** e copia a
+   **Connection string** (ver secção 1.A).
+2. Põe o código num repositório Git (GitHub) — já tens `Davide5fonseca/teste3`.
+3. No [Render](https://render.com): **New → Blueprint** → escolhe o repositório.
    Ele lê o `render.yaml` automaticamente.
-3. Define o **segredo** `ANTHROPIC_API_KEY` no painel (ficou como `sync: false`).
-4. Deploy → ficas com `https://despesas.onrender.com` (HTTPS automático ✅).
+4. Define os **segredos** no painel (ficaram como `sync: false`):
+   - `DATABASE_URL` = a connection string do Neon/Supabase
+   - `ANTHROPIC_API_KEY` = opcional (sem ela, os talões usam o OCR do telemóvel)
+5. Deploy → ficas com `https://despesas.onrender.com` (HTTPS automático ✅).
    Abre `…/api/saude` para confirmar.
 
 O que o blueprint faz, equivalente a configurar à mão um *Web Service*:
@@ -160,32 +172,11 @@ O que o blueprint faz, equivalente a configurar à mão um *Web Service*:
 - **Start Command:** `npm --prefix server start`
 - **Health Check Path:** `/api/saude`
 
-> ⚠️ **Persistência dos dados:** o SQLite grava num ficheiro. O **disco persistente
-> do Render só existe em planos PAGOS** (Starter ≈ 7 $/mês). No **plano gratuito**
-> remove o bloco `disk` e a env `DB_PATH` do `render.yaml` — mas os dados são
-> **apagados a cada reinício/redeploy** (só serve para testar). Para persistência
-> gratuita, vê 3.2 (Fly.io).
+> 💡 O plano **gratuito** do Render adormece ao fim de ~15 min de inatividade
+> (o 1.º pedido a seguir demora uns segundos a acordar). Os **dados não se perdem**
+> porque vivem no Postgres. Para evitar o "adormecer", usa um plano pago.
 
-### 3.2 (Alternativa grátis com persistência) **Fly.io** com volume
-
-O Fly.io tem volumes no tier gratuito. Na raiz do projeto:
-
-```bash
-fly launch            # cria a app (não faças deploy ainda)
-fly volumes create dados --size 1
-```
-
-No `fly.toml`, monta o volume e define o serviço para correr o backend (que já
-serve o frontend). Define os *secrets*:
-
-```bash
-fly secrets set ANTHROPIC_API_KEY=sk-ant-... DB_PATH=/data/despesas.db
-fly deploy
-```
-
-(O build deve compilar o cliente e arrancar o servidor, tal como o `render.yaml`.)
-
-### 3.3 (Alternativa) Versão 100% offline, **sem backend**
+### 3.2 (Alternativa) Versão 100% offline, **sem backend**
 
 Se quiseres dispensar servidor e guardar tudo **no próprio telemóvel**:
 
@@ -274,8 +265,9 @@ dados pré-preenchem o formulário e o utilizador confirma.
   reinicia o backend.
 - **A câmara não abre no telemóvel** → precisas de HTTPS (secção 3) ou de um túnel
   HTTPS (secção 2). Em `http://` simples a câmara é bloqueada.
-- **`better-sqlite3` falha a instalar** → usa Node 18–24; este projeto usa a v12
-  do `better-sqlite3`, que traz binários pré-compilados (não precisa de Python).
+- **“DATABASE_URL em falta” ou erro a ligar à BD** → confirma que puseste a
+  connection string do Postgres no `server/.env` (ou nas env vars do host). Hosts
+  remotos (Neon/Supabase) exigem SSL — o código já o ativa automaticamente.
 - **O telemóvel não abre `http://192.168.x.x:5173`** → confirma que estão na mesma
   Wi-Fi e que a firewall do PC permite a porta 5173 (em Windows, autoriza o Node
   na primeira vez que pedir).
