@@ -129,7 +129,7 @@ export default function Definicoes() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="palco space-y-6">
       <CabecalhoPagina titulo="Definições" subtitulo="Família, aparência, membros e categorias" />
 
       {/* Família */}

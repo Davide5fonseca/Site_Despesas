@@ -5,6 +5,7 @@ import { useAtualizarAuto } from "../lib/useAtualizar";
 import CabecalhoPagina from "../components/ui/CabecalhoPagina";
 import SeletorMes from "../components/ui/SeletorMes";
 import Secao from "../components/ui/Secao";
+import { Skeleton } from "../components/ui/Skeleton";
 import ListaMovimentos from "../components/ListaMovimentos";
 
 interface Grupo {
@@ -23,6 +24,7 @@ export default function PorPessoa() {
   const [erro, setErro] = useState<string | null>(null);
   const [saldos, setSaldos] = useState<Saldos | null>(null);
   const [ambito, setAmbito] = useState<"mes" | "tudo">("mes");
+  const [carregando, setCarregando] = useState(true);
 
   const carregar = useCallback(async () => {
     setErro(null);
@@ -39,6 +41,8 @@ export default function PorPessoa() {
       setSaldos(s);
     } catch (e: any) {
       setErro(e?.message || "Falha a carregar.");
+    } finally {
+      setCarregando(false);
     }
   }, [mes, ambito]);
 
@@ -60,7 +64,7 @@ export default function PorPessoa() {
   const totalMes = somar(despesas);
 
   return (
-    <div className="space-y-4">
+    <div className="palco space-y-4">
       <CabecalhoPagina
         titulo="Pessoas"
         subtitulo="Gastos e contas da casa"
@@ -80,7 +84,21 @@ export default function PorPessoa() {
         </p>
       )}
 
-      {membros.length === 0 && (
+      {carregando && (
+        <ul className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="cartao flex items-center gap-3 p-4">
+              <Skeleton className="h-11 w-11 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-1/3" />
+                <Skeleton className="h-2 w-full" />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {!carregando && membros.length === 0 && (
         <div className="cartao p-8 text-center text-slate-400">
           <p className="text-sm">Ainda não há membros na família.</p>
           <p className="mt-1 text-xs text-slate-500">Adiciona membros em Definições.</p>

@@ -14,8 +14,8 @@ const TemaCtx = createContext<CtxTema>({ tema: "dark", alternar: () => {}, defin
 function temaInicial(): Tema {
   const guardado = localStorage.getItem(CHAVE);
   if (guardado === "light" || guardado === "dark") return guardado;
-  // Por omissão segue a preferência do sistema.
-  return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  // Por omissão: tema claro (visual principal da app).
+  return "light";
 }
 
 export function TemaProvider({ children }: { children: ReactNode }) {

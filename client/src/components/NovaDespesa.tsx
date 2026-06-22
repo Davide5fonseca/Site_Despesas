@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { NavLink } from "react-router-dom";
 import { Categoria, Membro, TalaoExtraido } from "../api/client";
 import { hojeISO } from "../lib/format";
 import Modal from "./Modal";
@@ -9,8 +10,9 @@ interface Props {
   categorias: Categoria[];
   membros: Membro[];
   onGuardado: () => void;
-  // "destaque" mostra os botões grandes (ecrã Resumo); senão mostra um único botão.
-  variante?: "destaque" | "compacto";
+  // "cartoes" = 3 botões brancos (estilo banco); "destaque" = botões grandes;
+  // "compacto" = um único botão.
+  variante?: "destaque" | "compacto" | "cartoes";
 }
 
 type Vista = "fechado" | "scan" | "form";
@@ -63,7 +65,35 @@ export default function NovaDespesa({ categorias, membros, onGuardado, variante 
 
   return (
     <>
-      {variante === "destaque" ? (
+      {variante === "cartoes" ? (
+        <div className="grid grid-cols-3 gap-3">
+          <CartaoAcao label="Talão" onClick={() => setVista("scan")}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.2c.5 0 .96-.27 1.2-.7l.5-.86A1.5 1.5 0 0 1 10.6 3.7h2.8a1.5 1.5 0 0 1 1.3.74l.5.86c.24.43.7.7 1.2.7h1.1A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-8Z"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              />
+              <circle cx="12" cy="12.5" r="3.2" stroke="currentColor" strokeWidth="1.7" />
+            </svg>
+          </CartaoAcao>
+          <CartaoAcao label="Adicionar" destaque onClick={abrirManual}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+            </svg>
+          </CartaoAcao>
+          <CartaoAcaoLink to="/definicoes" label="Definições">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.9" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+                stroke="currentColor"
+                strokeWidth="1.4"
+              />
+            </svg>
+          </CartaoAcaoLink>
+        </div>
+      ) : variante === "destaque" ? (
         <div className="grid grid-cols-1 gap-3">
           <button className="botao-primario py-4 text-lg" onClick={() => setVista("scan")}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -106,5 +136,55 @@ export default function NovaDespesa({ categorias, membros, onGuardado, variante 
         />
       </Modal>
     </>
+  );
+}
+
+function CartaoAcao({
+  label,
+  onClick,
+  destaque = false,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  destaque?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center gap-2 rounded-2xl border border-linha/5 bg-noite-800 p-3 shadow-cartao transition active:scale-95"
+    >
+      <span
+        className={`grid h-11 w-11 place-items-center rounded-xl ${
+          destaque ? "bg-marca-500 text-white" : "bg-marca-500/12 text-marcatxt"
+        }`}
+      >
+        {children}
+      </span>
+      <span className="text-xs font-semibold text-slate-200">{label}</span>
+    </button>
+  );
+}
+
+function CartaoAcaoLink({
+  to,
+  label,
+  children,
+}: {
+  to: string;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <NavLink
+      to={to}
+      className="flex flex-col items-center gap-2 rounded-2xl border border-linha/5 bg-noite-800 p-3 shadow-cartao transition active:scale-95"
+    >
+      <span className="grid h-11 w-11 place-items-center rounded-xl bg-marca-500/12 text-marcatxt">
+        {children}
+      </span>
+      <span className="text-xs font-semibold text-slate-200">{label}</span>
+    </NavLink>
   );
 }

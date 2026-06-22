@@ -1,31 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, Categoria, Membro, Resumo as ResumoT } from "../api/client";
-import { formatarEuros, formatarMes, mesAtual } from "../lib/format";
+import { api, Resumo as ResumoT } from "../api/client";
+import { formatarEuros, mesAtual } from "../lib/format";
 import { useAtualizarAuto } from "../lib/useAtualizar";
-import { deslocarMes } from "../components/ui/SeletorMes";
+import CabecalhoPagina from "../components/ui/CabecalhoPagina";
+import SeletorMes from "../components/ui/SeletorMes";
 import Secao from "../components/ui/Secao";
-import NovaDespesa from "../components/NovaDespesa";
+import { Skeleton } from "../components/ui/Skeleton";
 import GraficoCategorias from "../components/GraficoCategorias";
 import GraficoMensal from "../components/GraficoMensal";
 
 export default function Resumo() {
   const [mes, setMes] = useState(mesAtual());
   const [resumo, setResumo] = useState<ResumoT | null>(null);
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [membros, setMembros] = useState<Membro[]>([]);
   const [erro, setErro] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setErro(null);
     try {
-      const [r, c, m] = await Promise.all([
-        api.resumo(mes),
-        api.listarCategorias(),
-        api.listarMembros(),
-      ]);
-      setResumo(r);
-      setCategorias(c);
-      setMembros(m);
+      setResumo(await api.resumo(mes));
     } catch (e: any) {
       setErro(e?.message || "Falha a carregar dados.");
     }
@@ -36,57 +28,22 @@ export default function Resumo() {
   }, [carregar]);
   useAtualizarAuto(carregar);
 
-  const nCategorias = resumo?.porCategoria.filter((c) => c.total > 0).length ?? 0;
-
   return (
-    <div className="space-y-5">
-      {/* Hero: total do mês com navegação integrada */}
-      <section className="relative overflow-hidden rounded-xl2 bg-gradient-to-br from-marca-600 to-marca-800 p-5 text-white shadow-cartao">
-        <div
-          className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-white/10"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute -bottom-16 -left-8 h-40 w-40 rounded-full bg-black/10"
-          aria-hidden
-        />
-        <div className="relative flex items-center justify-between">
-          <button
-            onClick={() => setMes(deslocarMes(mes, -1))}
-            aria-label="Mês anterior"
-            className="rounded-xl p-2 text-white/80 transition hover:bg-white/15 active:scale-90"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            </svg>
-          </button>
-          <div className="text-center">
-            <p className="text-xs font-medium uppercase tracking-wider text-white/70">
-              {formatarMes(mes)}
-            </p>
-            <p className="mt-0.5 text-[40px] font-extrabold leading-none tracking-tight tabular-nums">
+    <div className="palco space-y-4">
+      <CabecalhoPagina
+        titulo="Resumo"
+        subtitulo="Para onde vai o dinheiro"
+        acao={
+          <div className="rounded-2xl bg-noite-800 px-4 py-2 text-right shadow-cartao">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500">Total</p>
+            <p className="font-bold tabular-nums text-slate-100">
               {resumo ? formatarEuros(resumo.total) : "—"}
             </p>
-            <p className="mt-1.5 text-xs text-white/70">
-              {resumo && resumo.total > 0
-                ? `${nCategorias} ${nCategorias === 1 ? "categoria" : "categorias"}`
-                : "Sem despesas este mês"}
-            </p>
           </div>
-          <button
-            onClick={() => setMes(deslocarMes(mes, 1))}
-            aria-label="Mês seguinte"
-            className="rounded-xl p-2 text-white/80 transition hover:bg-white/15 active:scale-90"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-      </section>
+        }
+      />
 
-      {/* Ações */}
-      <NovaDespesa categorias={categorias} membros={membros} onGuardado={carregar} variante="destaque" />
+      <SeletorMes mes={mes} onMes={setMes} />
 
       {erro && (
         <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
@@ -96,12 +53,29 @@ export default function Resumo() {
 
       {/* Donut por categoria */}
       <Secao titulo="Por categoria" icone={<IconeDonut />}>
-        {resumo && <GraficoCategorias dados={resumo.porCategoria} total={resumo.total} />}
+        {resumo ? (
+          <GraficoCategorias dados={resumo.porCategoria} total={resumo.total} />
+        ) : (
+          <div className="flex flex-col items-center gap-4">
+            <Skeleton className="h-52 w-52 rounded-full" />
+            <div className="w-full space-y-2">
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} className="h-4 w-full" />
+              ))}
+            </div>
+          </div>
+        )}
       </Secao>
 
       {/* Total por pessoa */}
       <Secao titulo="Total por pessoa" icone={<IconePessoas />}>
-        {resumo && resumo.porPessoa.length && resumo.total > 0 ? (
+        {!resumo ? (
+          <div className="space-y-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-7 w-full" />
+            ))}
+          </div>
+        ) : resumo.porPessoa.length && resumo.total > 0 ? (
           <ul className="space-y-3">
             {resumo.porPessoa.map((p) => {
               const pct = resumo.total > 0 ? (p.total / resumo.total) * 100 : 0;
@@ -113,7 +87,7 @@ export default function Resumo() {
                       {formatarEuros(p.total)}
                     </span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-noite-900">
+                  <div className="h-2 overflow-hidden rounded-full bg-noite-700">
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-marca-500 to-marca-300 transition-all"
                       style={{ width: `${Math.max(pct, 3)}%` }}
@@ -130,7 +104,15 @@ export default function Resumo() {
 
       {/* Evolução mensal */}
       <Secao titulo="Últimos 6 meses" icone={<IconeBarras />}>
-        {resumo && <GraficoMensal dados={resumo.evolucao} mesAtivo={mes} />}
+        {resumo ? (
+          <GraficoMensal dados={resumo.evolucao} mesAtivo={mes} />
+        ) : (
+          <div className="flex h-44 items-end justify-between gap-2">
+            {[40, 70, 30, 90, 55, 75].map((h, i) => (
+              <Skeleton key={i} className="flex-1 rounded-t-md" style={{ height: `${h}%` }} />
+            ))}
+          </div>
+        )}
       </Secao>
     </div>
   );

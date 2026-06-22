@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import Inicio from "./pages/Inicio";
 import Resumo from "./pages/Resumo";
-import Movimentos from "./pages/Movimentos";
 import PorPessoa from "./pages/PorPessoa";
 import Definicoes from "./pages/Definicoes";
 import FamiliaGate from "./components/FamiliaGate";
 import { Familia, getFamilia } from "./api/client";
 
 const itensNav = [
+  { para: "/inicio", rotulo: "Início", Icone: IconeCasa },
   { para: "/resumo", rotulo: "Resumo", Icone: IconeGrafico },
-  { para: "/movimentos", rotulo: "Movimentos", Icone: IconeLista },
   { para: "/pessoas", rotulo: "Pessoas", Icone: IconePessoas },
   { para: "/definicoes", rotulo: "Definições", Icone: IconeEngrenagem },
 ];
@@ -17,47 +17,49 @@ const itensNav = [
 export default function App() {
   const [familia, setFamiliaState] = useState<Familia | null>(getFamilia());
 
-  // Sem família escolhida -> ecrã de criar/entrar.
   if (!familia) {
     return <FamiliaGate onPronto={setFamiliaState} />;
   }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col">
-      <main className="flex-1 px-4 pb-28 pt-5">
+      <main
+        className="flex-1 px-4 pb-28"
+        style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}
+      >
         <Routes>
-          <Route path="/" element={<Navigate to="/resumo" replace />} />
+          <Route path="/" element={<Navigate to="/inicio" replace />} />
+          <Route path="/inicio" element={<Inicio />} />
           <Route path="/resumo" element={<Resumo />} />
-          <Route path="/movimentos" element={<Movimentos />} />
           <Route path="/pessoas" element={<PorPessoa />} />
           <Route path="/definicoes" element={<Definicoes />} />
-          <Route path="*" element={<Navigate to="/resumo" replace />} />
+          <Route path="*" element={<Navigate to="/inicio" replace />} />
         </Routes>
       </main>
 
-      {/* Navegação inferior fixa, estilo app nativa */}
+      {/* Navegação inferior — estilo app de banco (ativo em círculo verde) */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-linha/10 bg-noite-800/90 backdrop-blur-lg"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -8px 24px -16px rgba(0,0,0,0.6)" }}
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-linha/10 bg-noite-800/95 backdrop-blur-lg"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -8px 24px -18px rgba(0,0,0,0.4)" }}
       >
         <div className="mx-auto flex max-w-md items-stretch justify-around px-2 py-1.5">
           {itensNav.map(({ para, rotulo, Icone }) => (
-            <NavLink key={para} to={para} className="flex flex-1 flex-col items-center">
+            <NavLink key={para} to={para} className="flex flex-1 flex-col items-center gap-1 py-1">
               {({ isActive }) => (
-                <span
-                  className={`flex w-full flex-col items-center gap-1 py-1.5 transition ${
-                    isActive ? "text-marcatxt" : "text-slate-500"
-                  }`}
-                >
+                <>
                   <span
-                    className={`grid place-items-center rounded-2xl px-5 py-1 transition-all duration-200 ${
-                      isActive ? "bg-marca-500/15" : ""
+                    className={`grid h-11 w-11 place-items-center rounded-2xl transition-all duration-200 ${
+                      isActive ? "bg-marca-500 text-white shadow-lg shadow-marca-900/30" : "text-slate-500"
                     }`}
                   >
                     <Icone activo={isActive} />
                   </span>
-                  <span className="text-[11px] font-semibold">{rotulo}</span>
-                </span>
+                  <span
+                    className={`text-[11px] font-semibold ${isActive ? "text-marcatxt" : "text-slate-500"}`}
+                  >
+                    {rotulo}
+                  </span>
+                </>
               )}
             </NavLink>
           ))}
@@ -67,40 +69,37 @@ export default function App() {
   );
 }
 
-function IconeGrafico({ activo }: { activo: boolean }) {
+function IconeCasa({ activo }: { activo: boolean }) {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+    <svg width="23" height="23" viewBox="0 0 24 24" fill="none">
       <path
-        d="M4 19V5M10 19V9M16 19v-6M22 19H2"
+        d="M3 10.5L12 4l9 6.5M5 9.5V19a1 1 0 0 0 1 1h3v-5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v5h3a1 1 0 0 0 1-1V9.5"
         stroke="currentColor"
-        strokeWidth={activo ? 2.4 : 2}
+        strokeWidth={activo ? 2.1 : 1.8}
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
 }
 
-function IconeLista({ activo }: { activo: boolean }) {
+function IconeGrafico({ activo }: { activo: boolean }) {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"
-        stroke="currentColor"
-        strokeWidth={activo ? 2.4 : 2}
-        strokeLinecap="round"
-      />
+    <svg width="23" height="23" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth={activo ? 2.1 : 1.8} />
+      <path d="M12 4a8 8 0 0 1 8 8h-8z" fill="currentColor" opacity={activo ? 0.9 : 0.5} />
     </svg>
   );
 }
 
 function IconePessoas({ activo }: { activo: boolean }) {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <circle cx="9" cy="8" r="3.2" stroke="currentColor" strokeWidth={activo ? 2.2 : 1.8} />
+    <svg width="23" height="23" viewBox="0 0 24 24" fill="none">
+      <circle cx="9" cy="8" r="3.1" stroke="currentColor" strokeWidth={activo ? 2.1 : 1.8} />
       <path
-        d="M3.5 19a5.5 5.5 0 0 1 11 0M16.5 5.2a3 3 0 0 1 0 5.6M17 19a5.5 5.5 0 0 0-3-4.9"
+        d="M3.5 19a5.5 5.5 0 0 1 11 0M16.5 5.3a3 3 0 0 1 0 5.4M17.5 19a5.5 5.5 0 0 0-3-4.9"
         stroke="currentColor"
-        strokeWidth={activo ? 2.2 : 1.8}
+        strokeWidth={activo ? 2.1 : 1.8}
         strokeLinecap="round"
       />
     </svg>
@@ -109,12 +108,12 @@ function IconePessoas({ activo }: { activo: boolean }) {
 
 function IconeEngrenagem({ activo }: { activo: boolean }) {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth={activo ? 2.4 : 2} />
+    <svg width="23" height="23" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth={activo ? 2.1 : 1.8} />
       <path
         d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
         stroke="currentColor"
-        strokeWidth={activo ? 1.8 : 1.5}
+        strokeWidth={activo ? 1.7 : 1.4}
       />
     </svg>
   );
