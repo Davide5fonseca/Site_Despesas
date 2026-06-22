@@ -22,7 +22,7 @@ export default function App() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col">
+    <div className="mx-auto flex min-h-screen max-w-md flex-col overflow-x-hidden">
       <main
         className="flex-1 px-4 pb-28"
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}

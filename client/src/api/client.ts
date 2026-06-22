@@ -120,7 +120,14 @@ async function pedir<T>(caminho: string, opcoes?: RequestInit): Promise<T> {
       ...(opcoes?.headers || {}),
     },
   });
-  if (!resposta.ok) throw await erroDe(resposta);
+  if (!resposta.ok) {
+    // Código de família inválido/expirado -> volta ao ecrã de família.
+    if (resposta.status === 401 && getFamilia()) {
+      setFamilia(null);
+      location.reload();
+    }
+    throw await erroDe(resposta);
+  }
   if (resposta.status === 204) return undefined as T;
   return resposta.json() as Promise<T>;
 }

@@ -1,4 +1,5 @@
 import { ReactNode, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   titulo: string;
@@ -20,7 +21,9 @@ export default function Modal({ titulo, aberto, onFechar, children }: Props) {
 
   if (!aberto) return null;
 
-  return (
+  // Portal para o body: evita que um ancestral com `transform` (animações)
+  // prenda o `position: fixed` e desalinhe o modal.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onFechar} />
       <div
@@ -46,6 +49,7 @@ export default function Modal({ titulo, aberto, onFechar, children }: Props) {
       </div>
 
       <style>{`@keyframes subir { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
-    </div>
+    </div>,
+    document.body
   );
 }

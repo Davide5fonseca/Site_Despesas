@@ -38,14 +38,12 @@ export default function GraficoCategorias({ dados, total }: Props) {
             </Pie>
           </PieChart>
         </ResponsiveContainer>
-        {/* Total no centro do donut */}
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-xs text-slate-400">Total do mês</span>
           <span className="text-xl font-extrabold text-slate-100">{formatarEuros(total)}</span>
         </div>
       </div>
 
-      {/* Legenda com valores e percentagens */}
       <ul className="w-full space-y-2">
         {dados.map((d) => {
           const pct = total > 0 ? Math.round((d.total / total) * 100) : 0;
