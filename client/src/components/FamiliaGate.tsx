@@ -8,17 +8,21 @@ interface Props {
 
 export default function FamiliaGate({ onPronto }: Props) {
   const [nome, setNome] = useState("");
+  const [pin, setPin] = useState("");
   const [codigo, setCodigo] = useState("");
+  const [pinEntrar, setPinEntrar] = useState("");
+  const [precisaPin, setPrecisaPin] = useState(false);
   const [criada, setCriada] = useState<Familia | null>(null);
   const [aCarregar, setACarregar] = useState<"criar" | "entrar" | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   async function criar() {
     if (!nome.trim()) return setErro("Dá um nome à tua família.");
+    if (pin && pin.trim().length < 4) return setErro("O PIN deve ter pelo menos 4 caracteres.");
     setErro(null);
     setACarregar("criar");
     try {
-      const f = await api.criarFamilia(nome.trim());
+      const f = await api.criarFamilia(nome.trim(), pin.trim() || undefined);
       setFamilia(f);
       setCriada(f); // mostra o código antes de entrar
     } catch (e: any) {
@@ -33,10 +37,11 @@ export default function FamiliaGate({ onPronto }: Props) {
     setErro(null);
     setACarregar("entrar");
     try {
-      const f = await api.entrarFamilia(codigo);
+      const f = await api.entrarFamilia(codigo, pinEntrar.trim() || undefined);
       setFamilia(f);
       onPronto(f);
     } catch (e: any) {
+      if (e?.pinNecessario) setPrecisaPin(true);
       setErro(e?.message || "Código inválido.");
     } finally {
       setACarregar(null);
@@ -112,6 +117,19 @@ export default function FamiliaGate({ onPronto }: Props) {
           onChange={(e) => setNome(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && criar()}
         />
+        <input
+          className="campo mb-1"
+          type="password"
+          inputMode="numeric"
+          placeholder="PIN (opcional, para proteger)"
+          maxLength={12}
+          value={pin}
+          onChange={(e) => setPin(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && criar()}
+        />
+        <p className="mb-3 text-xs text-slate-500">
+          Com PIN, só quem souber o código <span className="text-slate-400">e</span> o PIN entra.
+        </p>
         <button className="botao-primario w-full" onClick={criar} disabled={aCarregar !== null}>
           {aCarregar === "criar" ? "A criar…" : "Criar família"}
         </button>
@@ -133,6 +151,19 @@ export default function FamiliaGate({ onPronto }: Props) {
           onChange={(e) => setCodigo(e.target.value.toUpperCase())}
           onKeyDown={(e) => e.key === "Enter" && entrar()}
         />
+        {precisaPin && (
+          <input
+            className="campo mb-3 text-center text-lg font-bold tracking-[0.3em]"
+            type="password"
+            inputMode="numeric"
+            placeholder="PIN"
+            maxLength={12}
+            autoFocus
+            value={pinEntrar}
+            onChange={(e) => setPinEntrar(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && entrar()}
+          />
+        )}
         <button className="botao-secundario w-full" onClick={entrar} disabled={aCarregar !== null}>
           {aCarregar === "entrar" ? "A entrar…" : "Entrar"}
         </button>

@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import pg from "pg";
-import { q, tx, ah, pool } from "../db.js";
+import { q, um, tx, ah, pool } from "../db.js";
+import { materializarFixas } from "../lib/fixas.js";
 
 export const despesasRouter = Router();
 
@@ -11,7 +12,7 @@ const DespesaInput = z.object({
   categoria_id: z.number().int().positive().nullable().optional(),
   membro_id: z.number().int().positive().nullable().optional(),
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve ser YYYY-MM-DD"),
-  origem: z.enum(["manual", "talao"]).default("manual"),
+  origem: z.enum(["manual", "talao", "fixa"]).default("manual"),
   participantes: z.array(z.number().int().positive()).optional().default([]),
 });
 
@@ -37,6 +38,23 @@ async function participantesValidos(familiaId: number, ids: number[]): Promise<n
   return [...new Set(ids)].filter((id) => validos.has(id));
 }
 
+// Garante que categoria/membro indicados pertencem à própria família.
+async function validarPertenca(
+  familiaId: number,
+  categoriaId: number | null,
+  membroId: number | null
+): Promise<string | null> {
+  if (categoriaId != null) {
+    const ok = await um("SELECT 1 FROM categorias WHERE id = $1 AND familia_id = $2", [categoriaId, familiaId]);
+    if (!ok) return "Categoria inválida para esta família.";
+  }
+  if (membroId != null) {
+    const ok = await um("SELECT 1 FROM membros WHERE id = $1 AND familia_id = $2", [membroId, familiaId]);
+    if (!ok) return "Membro inválido para esta família.";
+  }
+  return null;
+}
+
 async function gravarParticipantes(c: pg.PoolClient, despesaId: number, ids: number[]) {
   for (const mid of ids) {
     await c.query(
@@ -57,6 +75,7 @@ despesasRouter.get(
 
     const mes = req.query.mes as string | undefined;
     if (mes && /^\d{4}-\d{2}$/.test(mes)) {
+      await materializarFixas(familiaId, mes); // gera as fixas deste mês, se faltar
       cond.push(`d.data LIKE $${i++}`);
       params.push(`${mes}-%`);
     }
@@ -83,6 +102,8 @@ despesasRouter.post(
     if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
     const d = parsed.data;
     const parts = await participantesValidos(familiaId, d.participantes);
+    const erroPert = await validarPertenca(familiaId, d.categoria_id ?? null, d.membro_id ?? null);
+    if (erroPert) return res.status(400).json({ erro: erroPert });
 
     const nova = await tx(async (c) => {
       const id = (
@@ -109,6 +130,8 @@ despesasRouter.put(
     if (!parsed.success) return res.status(400).json({ erro: parsed.error.flatten() });
     const d = parsed.data;
     const parts = await participantesValidos(familiaId, d.participantes);
+    const erroPert = await validarPertenca(familiaId, d.categoria_id ?? null, d.membro_id ?? null);
+    if (erroPert) return res.status(400).json({ erro: erroPert });
 
     const atualizada = await tx(async (c) => {
       const upd = await c.query(

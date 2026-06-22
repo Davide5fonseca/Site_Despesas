@@ -43,7 +43,7 @@ export interface Categoria {
   cor: string;
 }
 
-export type Origem = "manual" | "talao";
+export type Origem = "manual" | "talao" | "fixa";
 
 export interface Despesa {
   id: number;
@@ -68,6 +68,30 @@ export interface DespesaInput {
   data: string;
   origem: Origem;
   participantes: number[];
+}
+
+export interface DespesaFixa {
+  id: number;
+  valor_centimos: number;
+  descricao: string;
+  dia: number; // dia do mês (1-31)
+  ativa: boolean;
+  participantes: number[];
+  categoria_id: number | null;
+  categoria_nome: string | null;
+  categoria_cor: string | null;
+  membro_id: number | null;
+  membro_nome: string | null;
+}
+
+export interface DespesaFixaInput {
+  valor_centimos: number;
+  descricao: string;
+  categoria_id: number | null;
+  membro_id: number | null;
+  dia: number;
+  participantes: number[];
+  ativa: boolean;
 }
 
 export interface Saldos {
@@ -155,14 +179,33 @@ export const api = {
   },
 
   // Família
-  criarFamilia(nome: string) {
-    return pedir<Familia>("/familias", { method: "POST", body: JSON.stringify({ nome }) });
-  },
-  entrarFamilia(codigo: string) {
-    return pedir<Familia>("/familias/entrar", {
+  criarFamilia(nome: string, pin?: string) {
+    return pedir<Familia>("/familias", {
       method: "POST",
-      body: JSON.stringify({ codigo: codigo.trim().toUpperCase() }),
+      body: JSON.stringify({ nome, pin: pin || undefined }),
     });
+  },
+  // Devolve a família; em erro lança Error com .pinNecessario quando aplicável.
+  async entrarFamilia(codigo: string, pin?: string): Promise<Familia> {
+    const resposta = await fetch(`${BASE}/familias/entrar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ codigo: codigo.trim().toUpperCase(), pin: pin || undefined }),
+    });
+    if (!resposta.ok) {
+      let corpo: any = {};
+      try {
+        corpo = await resposta.json();
+      } catch {
+        /* sem corpo */
+      }
+      const err = new Error(
+        typeof corpo?.erro === "string" ? corpo.erro : `Erro ${resposta.status}`
+      ) as Error & { pinNecessario?: boolean };
+      err.pinNecessario = !!corpo?.pinNecessario;
+      throw err;
+    }
+    return resposta.json() as Promise<Familia>;
   },
 
   // Despesas
@@ -191,6 +234,20 @@ export const api = {
   // Saldos / acertar contas (mes opcional)
   saldos(mes?: string) {
     return pedir<Saldos>(`/saldos${mes ? `?mes=${mes}` : ""}`);
+  },
+
+  // Despesas fixas / subscrições
+  listarFixas() {
+    return pedir<DespesaFixa[]>("/fixas");
+  },
+  criarFixa(d: DespesaFixaInput) {
+    return pedir<DespesaFixa>("/fixas", { method: "POST", body: JSON.stringify(d) });
+  },
+  editarFixa(id: number, d: DespesaFixaInput) {
+    return pedir<DespesaFixa>(`/fixas/${id}`, { method: "PUT", body: JSON.stringify(d) });
+  },
+  apagarFixa(id: number) {
+    return pedir<void>(`/fixas/${id}`, { method: "DELETE" });
   },
 
   // Categorias

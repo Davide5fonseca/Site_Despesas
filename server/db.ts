@@ -64,7 +64,7 @@ const CATEGORIAS_INICIAIS: Array<{ nome: string; cor: string }> = [
 ];
 
 const ALFABETO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-function gerarCodigo(tamanho = 6): string {
+function gerarCodigo(tamanho = 8): string {
   let s = "";
   for (let i = 0; i < tamanho; i++) s += ALFABETO[randomInt(ALFABETO.length)];
   return s;
@@ -84,6 +84,10 @@ export interface Familia {
   nome: string;
 }
 
+export interface FamiliaComPin extends Familia {
+  pin_hash: string | null;
+}
+
 export async function seedCategoriasParaFamilia(familiaId: number, c?: pg.PoolClient) {
   const exec = c ?? pool;
   for (const cat of CATEGORIAS_INICIAIS) {
@@ -95,14 +99,14 @@ export async function seedCategoriasParaFamilia(familiaId: number, c?: pg.PoolCl
   }
 }
 
-export async function criarFamilia(nome: string): Promise<Familia> {
+export async function criarFamilia(nome: string, pinHash: string | null = null): Promise<Familia> {
   const nomeFinal = nome.trim() || "A nossa casa";
   return tx(async (c) => {
     const codigo = await gerarCodigoUnico();
     const fam = (
       await c.query<Familia>(
-        "INSERT INTO familias (codigo, nome) VALUES ($1, $2) RETURNING id, codigo, nome",
-        [codigo, nomeFinal]
+        "INSERT INTO familias (codigo, nome, pin_hash) VALUES ($1, $2, $3) RETURNING id, codigo, nome",
+        [codigo, nomeFinal, pinHash]
       )
     ).rows[0];
     await seedCategoriasParaFamilia(fam.id, c);
@@ -116,6 +120,14 @@ export async function obterFamiliaPorCodigo(codigo: string): Promise<Familia | u
   ]);
 }
 
+// Inclui o pin_hash — apenas para validação no servidor (nunca devolvido ao cliente).
+export async function obterFamiliaComPin(codigo: string): Promise<FamiliaComPin | undefined> {
+  return um<FamiliaComPin>(
+    "SELECT id, codigo, nome, pin_hash FROM familias WHERE codigo = $1",
+    [codigo.trim().toUpperCase()]
+  );
+}
+
 // ── Migração (cria tabelas se não existirem) ───────────────────────────────
 export async function migrate() {
   await pool.query(`
@@ -123,8 +135,10 @@ export async function migrate() {
       id        SERIAL PRIMARY KEY,
       codigo    TEXT NOT NULL UNIQUE,
       nome      TEXT NOT NULL DEFAULT 'A nossa casa',
+      pin_hash  TEXT,
       criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    ALTER TABLE familias ADD COLUMN IF NOT EXISTS pin_hash TEXT;
 
     CREATE TABLE IF NOT EXISTS membros (
       id         SERIAL PRIMARY KEY,
@@ -158,6 +172,31 @@ export async function migrate() {
       membro_id  INTEGER NOT NULL REFERENCES membros(id)  ON DELETE CASCADE,
       PRIMARY KEY (despesa_id, membro_id)
     );
+
+    -- Despesas fixas / subscrições (modelo que gera uma despesa por mês)
+    CREATE TABLE IF NOT EXISTS despesas_fixas (
+      id             SERIAL PRIMARY KEY,
+      familia_id     INTEGER NOT NULL REFERENCES familias(id) ON DELETE CASCADE,
+      valor_centimos INTEGER NOT NULL CHECK (valor_centimos >= 0),
+      descricao      TEXT NOT NULL DEFAULT '',
+      categoria_id   INTEGER REFERENCES categorias(id) ON DELETE SET NULL,
+      membro_id      INTEGER REFERENCES membros(id)    ON DELETE SET NULL,
+      dia            INTEGER NOT NULL DEFAULT 1 CHECK (dia >= 1 AND dia <= 31),
+      participantes  INTEGER[] NOT NULL DEFAULT '{}',
+      ativa          BOOLEAN NOT NULL DEFAULT true,
+      criado_em      TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    ALTER TABLE despesas ADD COLUMN IF NOT EXISTS despesa_fixa_id INTEGER REFERENCES despesas_fixas(id) ON DELETE SET NULL;
+
+    -- Registo de que mês de cada fixa já foi gerado (evita duplicar)
+    CREATE TABLE IF NOT EXISTS geracoes_fixas (
+      despesa_fixa_id INTEGER NOT NULL REFERENCES despesas_fixas(id) ON DELETE CASCADE,
+      mes             TEXT NOT NULL,
+      despesa_id      INTEGER REFERENCES despesas(id) ON DELETE SET NULL,
+      PRIMARY KEY (despesa_fixa_id, mes)
+    );
+    CREATE INDEX IF NOT EXISTS idx_fixas_familia ON despesas_fixas(familia_id);
 
     CREATE INDEX IF NOT EXISTS idx_despesas_familia   ON despesas(familia_id, data);
     CREATE INDEX IF NOT EXISTS idx_despesas_categoria ON despesas(categoria_id);

@@ -16,8 +16,10 @@ CREATE TABLE IF NOT EXISTS familias (
   id        SERIAL PRIMARY KEY,
   codigo    TEXT NOT NULL UNIQUE,
   nome      TEXT NOT NULL DEFAULT 'A nossa casa',
+  pin_hash  TEXT,                                 -- PIN opcional (hash bcrypt)
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE familias ADD COLUMN IF NOT EXISTS pin_hash TEXT;
 
 -- Membros da casa (pertencem a uma família)
 CREATE TABLE IF NOT EXISTS membros (
@@ -54,6 +56,29 @@ CREATE TABLE IF NOT EXISTS despesa_membros (
   despesa_id INTEGER NOT NULL REFERENCES despesas(id) ON DELETE CASCADE,
   membro_id  INTEGER NOT NULL REFERENCES membros(id)  ON DELETE CASCADE,
   PRIMARY KEY (despesa_id, membro_id)
+);
+
+-- Despesas fixas / subscrições (geram uma despesa por mês)
+CREATE TABLE IF NOT EXISTS despesas_fixas (
+  id             SERIAL PRIMARY KEY,
+  familia_id     INTEGER NOT NULL REFERENCES familias(id) ON DELETE CASCADE,
+  valor_centimos INTEGER NOT NULL CHECK (valor_centimos >= 0),
+  descricao      TEXT NOT NULL DEFAULT '',
+  categoria_id   INTEGER REFERENCES categorias(id) ON DELETE SET NULL,
+  membro_id      INTEGER REFERENCES membros(id)    ON DELETE SET NULL,
+  dia            INTEGER NOT NULL DEFAULT 1 CHECK (dia >= 1 AND dia <= 31),
+  participantes  INTEGER[] NOT NULL DEFAULT '{}',
+  ativa          BOOLEAN NOT NULL DEFAULT true,
+  criado_em      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE despesas ADD COLUMN IF NOT EXISTS despesa_fixa_id INTEGER REFERENCES despesas_fixas(id) ON DELETE SET NULL;
+
+-- Registo de que mês de cada fixa já foi gerado (evita duplicar)
+CREATE TABLE IF NOT EXISTS geracoes_fixas (
+  despesa_fixa_id INTEGER NOT NULL REFERENCES despesas_fixas(id) ON DELETE CASCADE,
+  mes             TEXT NOT NULL,
+  despesa_id      INTEGER REFERENCES despesas(id) ON DELETE SET NULL,
+  PRIMARY KEY (despesa_fixa_id, mes)
 );
 
 -- Índices (desempenho das consultas mais comuns)

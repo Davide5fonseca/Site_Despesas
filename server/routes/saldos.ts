@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { q, ah } from "../db.js";
+import { materializarFixas, mesAtual } from "../lib/fixas.js";
 
 export const saldosRouter = Router();
 
@@ -10,6 +11,8 @@ saldosRouter.get(
     const familiaId = (req as any).familiaId as number;
     const mes = req.query.mes as string | undefined;
     const filtraMes = !!(mes && /^\d{4}-\d{2}$/.test(mes));
+    // Garante as fixas geradas (do mês pedido, ou do mês atual no modo "tudo").
+    await materializarFixas(familiaId, filtraMes ? (mes as string) : mesAtual());
 
     const membros = await q<{ id: number; nome: string }>(
       "SELECT id, nome FROM membros WHERE familia_id = $1 ORDER BY lower(nome)",

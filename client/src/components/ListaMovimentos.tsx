@@ -117,6 +117,14 @@ export default function ListaMovimentos({ despesas, categorias, membros, onAlter
                             IA
                           </span>
                         )}
+                        {d.origem === "fixa" && (
+                          <span
+                            title="Despesa fixa (subscrição)"
+                            className="shrink-0 rounded-md bg-slate-500/15 px-1.5 py-0.5 text-[10px] font-bold text-slate-400"
+                          >
+                            FIXA
+                          </span>
+                        )}
                       </div>
                       <p className="mt-0.5 truncate text-xs text-slate-400">
                         {[d.categoria_nome, d.membro_nome].filter(Boolean).join(" · ") || "Sem categoria"}

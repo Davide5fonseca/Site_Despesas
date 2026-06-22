@@ -3,6 +3,7 @@ import { api, Categoria, Membro, getFamilia, setFamilia } from "../api/client";
 import BotaoTema from "../components/BotaoTema";
 import Modal from "../components/Modal";
 import CabecalhoPagina from "../components/ui/CabecalhoPagina";
+import DespesasFixas from "../components/DespesasFixas";
 
 const IconePencil = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
@@ -313,6 +314,9 @@ export default function Definicoes() {
           ))}
         </ul>
       </section>
+
+      {/* Despesas fixas / subscrições */}
+      <DespesasFixas categorias={categorias} membros={membros} />
 
       <p className="px-1 text-center text-xs text-slate-600">
         Despesas da Casa · PWA · dados guardados no teu servidor

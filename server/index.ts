@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -12,21 +13,46 @@ import { resumoRouter } from "./routes/resumo.js";
 import { saldosRouter } from "./routes/saldos.js";
 import { talaoRouter } from "./routes/talao.js";
 import { familiasRouter } from "./routes/familias.js";
+import { fixasRouter } from "./routes/fixas.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const TESTE = process.env.NODE_ENV === "test";
 
-const app = express();
+export const app = express();
 const PORT = Number(process.env.PORT || 3001);
 
-app.use(cors());
+// Render/hosts correm atrás de um proxy -> necessário para o rate-limit ver o IP real.
+app.set("trust proxy", 1);
+
+// CORS: em produção restringe à origem do site (FRONTEND_ORIGIN); em dev fica aberto.
+const ORIGEM = process.env.FRONTEND_ORIGIN;
+app.use(cors(ORIGEM ? { origin: ORIGEM } : {}));
 app.use(express.json());
+
+// Rate-limiting global (anti-abuso) + limitador apertado para criar/entrar família.
+const limiteGlobal = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 600,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { erro: "Demasiados pedidos. Aguarda um pouco." },
+});
+const limiteFamilia = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 20, // máx. 20 tentativas de criar/entrar por IP em 10 min
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { erro: "Demasiadas tentativas. Tenta de novo daqui a uns minutos." },
+});
+// Em testes os limitadores são desligados (não interferem com os cenários).
+if (!TESTE) app.use("/api", limiteGlobal);
 
 app.get("/api/saude", (_req, res) =>
   res.json({ ok: true, ia: Boolean(process.env.ANTHROPIC_API_KEY) })
 );
 
-// Criar/entrar numa família NÃO exige família prévia.
-app.use("/api/familias", familiasRouter);
+// Criar/entrar numa família NÃO exige família prévia (mas é fortemente limitado).
+app.use("/api/familias", ...(TESTE ? [] : [limiteFamilia]), familiasRouter);
 
 // Middleware de scoping: resolve o código (cabeçalho x-familia-codigo) -> familia_id.
 const exigirFamilia = ah(async (req, res, next) => {
@@ -43,6 +69,7 @@ app.use("/api/categorias", exigirFamilia, categoriasRouter);
 app.use("/api/membros", exigirFamilia, membrosRouter);
 app.use("/api/resumo", exigirFamilia, resumoRouter);
 app.use("/api/saldos", exigirFamilia, saldosRouter);
+app.use("/api/fixas", exigirFamilia, fixasRouter);
 app.use("/api/talao", exigirFamilia, talaoRouter);
 
 // Servir o frontend compilado (Opção A: tudo num só serviço).
@@ -64,18 +91,21 @@ app.use(
 );
 
 // Arranque: garante a base de dados antes de aceitar pedidos.
-migrate()
-  .then(() => {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`API a correr em http://0.0.0.0:${PORT}`);
-      if (!process.env.ANTHROPIC_API_KEY) {
-        console.warn(
-          "⚠️  ANTHROPIC_API_KEY não definida — a leitura de talões por IA usa o OCR do telemóvel."
-        );
-      }
+// (Em testes, a app é importada e o ciclo de vida é gerido pelo runner.)
+if (!TESTE) {
+  migrate()
+    .then(() => {
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`API a correr em http://0.0.0.0:${PORT}`);
+        if (!process.env.ANTHROPIC_API_KEY) {
+          console.warn(
+            "⚠️  ANTHROPIC_API_KEY não definida — a leitura de talões por IA usa o OCR do telemóvel."
+          );
+        }
+      });
+    })
+    .catch((e) => {
+      console.error("Falha a ligar/migrar a base de dados:", e.message);
+      process.exit(1);
     });
-  })
-  .catch((e) => {
-    console.error("Falha a ligar/migrar a base de dados:", e.message);
-    process.exit(1);
-  });
+}

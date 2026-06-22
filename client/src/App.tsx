@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
-import Inicio from "./pages/Inicio";
-import Resumo from "./pages/Resumo";
-import PorPessoa from "./pages/PorPessoa";
-import Definicoes from "./pages/Definicoes";
 import FamiliaGate from "./components/FamiliaGate";
 import { Familia, getFamilia } from "./api/client";
+
+// Lazy-load das páginas: o Recharts (gráficos) só carrega ao abrir o Resumo,
+// deixando o arranque inicial muito mais leve.
+const Inicio = lazy(() => import("./pages/Inicio"));
+const Resumo = lazy(() => import("./pages/Resumo"));
+const PorPessoa = lazy(() => import("./pages/PorPessoa"));
+const Definicoes = lazy(() => import("./pages/Definicoes"));
 
 const itensNav = [
   { para: "/inicio", rotulo: "Início", Icone: IconeCasa },
@@ -27,14 +30,16 @@ export default function App() {
         className="flex-1 px-4 pb-32"
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}
       >
-        <Routes>
-          <Route path="/" element={<Navigate to="/inicio" replace />} />
-          <Route path="/inicio" element={<Inicio />} />
-          <Route path="/resumo" element={<Resumo />} />
-          <Route path="/pessoas" element={<PorPessoa />} />
-          <Route path="/definicoes" element={<Definicoes />} />
-          <Route path="*" element={<Navigate to="/inicio" replace />} />
-        </Routes>
+        <Suspense fallback={<Carregando />}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/inicio" replace />} />
+            <Route path="/inicio" element={<Inicio />} />
+            <Route path="/resumo" element={<Resumo />} />
+            <Route path="/pessoas" element={<PorPessoa />} />
+            <Route path="/definicoes" element={<Definicoes />} />
+            <Route path="*" element={<Navigate to="/inicio" replace />} />
+          </Routes>
+        </Suspense>
       </main>
 
       {/* Navegação inferior flutuante */}
@@ -69,6 +74,14 @@ export default function App() {
           ))}
         </div>
       </nav>
+    </div>
+  );
+}
+
+function Carregando() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <span className="h-8 w-8 animate-spin rounded-full border-2 border-marca-400 border-t-transparent" />
     </div>
   );
 }

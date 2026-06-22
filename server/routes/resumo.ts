@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { q, um, ah } from "../db.js";
+import { materializarFixas } from "../lib/fixas.js";
 
 export const resumoRouter = Router();
 
@@ -24,6 +25,7 @@ resumoRouter.get(
       const agora = new Date();
       mes = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
     }
+    await materializarFixas(familiaId, mes); // garante as fixas deste mês
     const padrao = `${mes}-%`;
 
     const totalRow = await um<{ total: string }>(
