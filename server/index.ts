@@ -90,22 +90,21 @@ app.use(
   }
 );
 
-// Arranque: garante a base de dados antes de aceitar pedidos.
-// (Em testes, a app é importada e o ciclo de vida é gerido pelo runner.)
+// Arranque. (Em testes, a app é importada e o ciclo de vida é gerido pelo runner.)
 if (!TESTE) {
+  // Escuta JÁ, para o health check (/api/saude) passar mesmo que a base de dados
+  // demore a responder — senão o deploy fica em "Timed Out".
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`API a correr em http://0.0.0.0:${PORT}`);
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.warn(
+        "⚠️  ANTHROPIC_API_KEY não definida — a leitura de talões por IA usa o OCR do telemóvel."
+      );
+    }
+  });
+  // Migra em segundo plano. Se falhar, regista o erro mas NÃO derruba o serviço
+  // (o site continua a abrir e o erro fica visível nos logs).
   migrate()
-    .then(() => {
-      app.listen(PORT, "0.0.0.0", () => {
-        console.log(`API a correr em http://0.0.0.0:${PORT}`);
-        if (!process.env.ANTHROPIC_API_KEY) {
-          console.warn(
-            "⚠️  ANTHROPIC_API_KEY não definida — a leitura de talões por IA usa o OCR do telemóvel."
-          );
-        }
-      });
-    })
-    .catch((e) => {
-      console.error("Falha a ligar/migrar a base de dados:", e.message);
-      process.exit(1);
-    });
+    .then(() => console.log("Base de dados pronta."))
+    .catch((e) => console.error("Falha a migrar a base de dados:", e.message));
 }

@@ -22,7 +22,7 @@ const LOJAS: Loja[] = [
   { nome: "Pingo Doce", cor: "#009640", categoria: "Supermercado", emoji: "🛒", dominio: "pingodoce.pt", padrao: /pingo\s*doce/i },
   { nome: "Lidl", cor: "#0050aa", categoria: "Supermercado", emoji: "🛒", dominio: "lidl.pt", padrao: /\blidl\b/i },
   { nome: "Aldi", cor: "#001e96", categoria: "Supermercado", emoji: "🛒", dominio: "aldi.pt", padrao: /\baldi\b/i },
-  { nome: "Minipreço", cor: "#e30613", categoria: "Supermercado", emoji: "🛒", dominio: "minipreco.pt", padrao: /minipre[çc]o|\bdia\b/i },
+  { nome: "Minipreço", cor: "#e30613", categoria: "Supermercado", emoji: "🛒", dominio: "minipreco.pt", padrao: /minipre[çc]o/i },
   { nome: "Auchan", cor: "#e2001a", categoria: "Supermercado", emoji: "🛒", dominio: "auchan.pt", padrao: /auchan|jumbo/i },
   { nome: "Intermarché", cor: "#e2001a", categoria: "Supermercado", emoji: "🛒", dominio: "intermarche.pt", padrao: /intermarch/i },
   { nome: "Mercadona", cor: "#00803d", categoria: "Supermercado", emoji: "🛒", dominio: "mercadona.pt", padrao: /mercadona/i },
@@ -62,13 +62,13 @@ const LOJAS: Loja[] = [
   { nome: "Wells", cor: "#0aa0a0", categoria: "Saúde", emoji: "💊", dominio: "wells.pt", padrao: /\bwells\b/i },
 
   // ── Contas / Serviços ──
-  { nome: "EDP", cor: "#15a04a", categoria: "Contas/Serviços", emoji: "⚡", dominio: "edp.pt", padrao: /\bedp\b|energia/i },
+  { nome: "EDP", cor: "#15a04a", categoria: "Contas/Serviços", emoji: "⚡", dominio: "edp.pt", padrao: /\bedp\b/i },
   { nome: "Galp Energia", cor: "#ff5f00", categoria: "Contas/Serviços", emoji: "⚡", dominio: "galp.com", padrao: /galp\s*energia/i },
   { nome: "MEO", cor: "#00a0e1", categoria: "Contas/Serviços", emoji: "📶", dominio: "meo.pt", padrao: /\bmeo\b/i },
   { nome: "NOS", cor: "#83be23", categoria: "Contas/Serviços", emoji: "📶", dominio: "nos.pt", padrao: /\bnos\b/i },
   { nome: "Vodafone", cor: "#e60000", categoria: "Contas/Serviços", emoji: "📶", dominio: "vodafone.pt", padrao: /vodafone/i },
   { nome: "NOWO", cor: "#ff6a13", categoria: "Contas/Serviços", emoji: "📶", dominio: "nowo.pt", padrao: /\bnowo\b/i },
-  { nome: "Águas", cor: "#00a3e0", categoria: "Contas/Serviços", emoji: "💧", padrao: /\b[áa]gua|epal|\bsmas\b/i },
+  { nome: "Águas", cor: "#00a3e0", categoria: "Contas/Serviços", emoji: "💧", padrao: /\bepal\b|\bsmas\b|[áa]guas\s+d[eo]\b/i },
 ];
 
 // Reconhece a loja a partir de um texto (nome do talão / descrição). null se nenhuma.

@@ -17,6 +17,11 @@ const local = /@(localhost|127\.0\.0\.1)[:/]/.test(DATABASE_URL);
 export const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: local ? undefined : { rejectUnauthorized: false },
+  // Gentil com o limite de ligações do Supabase free; falha rápido se a ligação
+  // estalar (em vez de ficar pendurada e bloquear o arranque/deploy).
+  max: 5,
+  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 30_000,
 });
 
 // ── Helpers de query ───────────────────────────────────────────────────────
