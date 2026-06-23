@@ -319,7 +319,7 @@ export default function Definicoes() {
       <DespesasFixas categorias={categorias} membros={membros} />
 
       <p className="px-1 text-center text-xs text-slate-600">
-        Despesas da Casa · PWA · dados guardados no teu servidor
+        ScanWise · PWA · dados guardados no teu servidor
       </p>
 
       {/* Modal: editar categoria */}

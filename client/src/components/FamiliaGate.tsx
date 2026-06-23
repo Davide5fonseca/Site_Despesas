@@ -93,10 +93,10 @@ export default function FamiliaGate({ onPronto }: Props) {
   return (
     <Camada>
       <header className="mb-6 text-center">
-        <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-marca-600 text-3xl font-extrabold text-white shadow-cartao">
-          €
+        <div className="mx-auto mb-3 grid h-16 w-16 place-items-center overflow-hidden rounded-2xl bg-white shadow-cartao ring-1 ring-black/5">
+          <img src="/logo.png" alt="ScanWise" className="h-full w-full object-contain p-1.5" />
         </div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-100">Despesas da Casa</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-100">ScanWise</h1>
         <p className="text-sm text-slate-400">Cria a tua família ou entra com um código.</p>
       </header>
 

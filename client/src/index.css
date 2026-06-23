@@ -19,10 +19,10 @@
   --slate-600: 71 85 105;
 
   --linha: 255 255 255;
-  --marca-txt: 95 217 195; /* marca-300 */
+  --marca-txt: 143 193 203; /* marca-300 (teal claro, legível no escuro) */
 
-  --tinta-marca: 20 160 138;
-  --brilho: 0.12;
+  --tinta-marca: 52 125 142; /* teal do logo */
+  --brilho: 0.14;
 }
 
 :root.light {
@@ -40,10 +40,10 @@
   --slate-600: 160 170 185; /* texto ténue */
 
   --linha: 15 23 42; /* bordas/overlays escuros sobre claro */
-  --marca-txt: 15 118 110; /* marca-600 */
+  --marca-txt: 43 101 117; /* marca-600 (teal escuro, legível no branco) */
 
-  --tinta-marca: 20 160 138;
-  --brilho: 0; /* sem tinta no fundo: o hero verde já dá a cor */
+  --tinta-marca: 52 125 142;
+  --brilho: 0; /* sem tinta no fundo: o hero já dá a cor */
 }
 
 /* Sombras mais suaves no tema claro (cartões "flutuantes" como no print) */
