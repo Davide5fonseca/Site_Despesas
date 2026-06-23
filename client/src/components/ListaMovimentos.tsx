@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { api, Categoria, Despesa, Membro } from "../api/client";
 import { formatarEuros, formatarNumero } from "../lib/format";
+import { reconhecerLoja } from "../lib/lojas";
+import LogoLoja from "./LogoLoja";
 import Modal from "./Modal";
 import FormDespesa, { DadosIniciais } from "./FormDespesa";
 
@@ -87,7 +89,9 @@ export default function ListaMovimentos({ despesas, categorias, membros, onAlter
               </span>
             </div>
             <ul className="cartao overflow-hidden">
-              {g.items.map((d, i) => (
+              {g.items.map((d, i) => {
+                const loja = reconhecerLoja(d.descricao);
+                return (
                 <li
                   key={d.id}
                   className={`flex items-center gap-3 px-3 py-2.5 ${
@@ -95,15 +99,19 @@ export default function ListaMovimentos({ despesas, categorias, membros, onAlter
                   }`}
                 >
                   <button onClick={() => setAEditar(d)} className="flex flex-1 items-center gap-3 text-left">
-                    <span
-                      className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-sm font-bold ring-1 ring-inset ring-linha/10"
-                      style={{
-                        backgroundColor: (d.categoria_cor ?? "#475569") + "26",
-                        color: d.categoria_cor ?? "#94a3b8",
-                      }}
-                    >
-                      {(d.categoria_nome ?? "?").charAt(0).toUpperCase()}
-                    </span>
+                    {loja ? (
+                      <LogoLoja loja={loja} tamanho={44} />
+                    ) : (
+                      <span
+                        className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-sm font-bold ring-1 ring-inset ring-linha/10"
+                        style={{
+                          backgroundColor: (d.categoria_cor ?? "#475569") + "26",
+                          color: d.categoria_cor ?? "#94a3b8",
+                        }}
+                      >
+                        {(d.categoria_nome ?? "?").charAt(0).toUpperCase()}
+                      </span>
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-[15px] font-semibold text-slate-100">
@@ -145,7 +153,8 @@ export default function ListaMovimentos({ despesas, categorias, membros, onAlter
                     </svg>
                   </button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </div>
         ))}

@@ -47,6 +47,19 @@ export default defineConfig({
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
             },
           },
+          {
+            // Logótipos das lojas (Clearbit / favicons Google). Cache-primeiro:
+            // depois da 1.ª vez aparecem mesmo offline e poupam pedidos.
+            urlPattern: ({ url }) =>
+              url.hostname === "logo.clearbit.com" ||
+              url.hostname === "www.google.com",
+            handler: "CacheFirst",
+            options: {
+              cacheName: "logos-lojas",
+              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
         ],
       },
       devOptions: {

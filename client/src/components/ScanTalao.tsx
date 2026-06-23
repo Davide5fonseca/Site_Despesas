@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { api, Categoria, TalaoExtraido } from "../api/client";
 import { comprimirImagem } from "../lib/imagem";
 import { lerTalaoLocal } from "../lib/ocrTalao";
+import { lerQRTalao, mesclarQR } from "../lib/qrTalao";
+import { enriquecerLoja } from "../lib/lojas";
 
 interface Props {
   categorias: Categoria[];
@@ -42,10 +44,15 @@ export default function ScanTalao({ categorias, onExtraido, onFechar }: Props) {
 
       setEstado("a_ler");
       const nomes = categorias.map((c) => c.nome);
-      const dados = usarIA
+
+      // 1) QR fiscal (rápido e exato p/ valor e data). Não falha o fluxo se não houver.
+      const qr = await lerQRTalao(comprimida).catch(() => null);
+      // 2) OCR/IA para a loja e a categoria (e fallback de valor/data).
+      const base = usarIA
         ? await api.lerTalao(comprimida)
         : await lerTalaoLocal(comprimida, nomes, (p) => setProgresso(p));
 
+      const dados = enriquecerLoja(qr ? mesclarQR(base, qr) : base);
       onExtraido(dados, url);
     } catch (err: any) {
       setEstado("erro");
@@ -121,9 +128,8 @@ export default function ScanTalao({ categorias, onExtraido, onFechar }: Props) {
       )}
 
       <p className="text-center text-xs text-slate-500">
-        {usarIA === false
-          ? "Leitura feita no teu telemóvel (grátis). Extrai valor, data e loja — confirmas tudo antes de gravar. Na 1.ª vez descarrega o idioma (precisa de internet uma vez)."
-          : "A IA extrai valor, loja, data e sugere a categoria. Confirmas tudo antes de gravar."}
+        Lê o QR fiscal do talão (valor e data exatos) e {usarIA === false ? "o resto no teu telemóvel (grátis)" : "a IA preenche a loja e a categoria"}. Confirmas tudo antes de gravar.
+        {usarIA === false && " Na 1.ª vez descarrega o idioma (precisa de internet uma vez)."}
         <br />
         Nota: no iPhone, a câmara exige HTTPS.
       </p>

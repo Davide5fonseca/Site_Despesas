@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { api, Categoria, Membro, Origem } from "../api/client";
 import { hojeISO, parseEurosParaCentimos } from "../lib/format";
+import { reconhecerLoja } from "../lib/lojas";
+import LogoLoja from "./LogoLoja";
 
 export interface DadosIniciais {
   id?: number;
@@ -47,6 +49,7 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
 
   const editar = inicial?.id != null;
   const emFalta = (campo: string) => talao?.camposEmFalta.includes(campo);
+  const loja = reconhecerLoja(descricao);
 
   async function guardar() {
     setErro(null);
@@ -81,7 +84,7 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
       {talao && (
         <div className={`rounded-2xl border px-4 py-3 text-sm ${corConfianca[talao.confianca]}`}>
           <p className="font-semibold">
-            Talão lido por IA · confiança {talao.confianca}
+            Talão lido · confiança {talao.confianca}
           </p>
           <p className="mt-0.5 opacity-90">
             {talao.camposEmFalta.length
@@ -105,7 +108,18 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
       </div>
 
       <div>
-        <label className="rotulo">Descrição</label>
+        <div className="mb-1 flex items-center justify-between">
+          <label className="rotulo mb-0">Descrição</label>
+          {loja && (
+            <span
+              className="flex items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2.5 text-xs font-semibold"
+              style={{ backgroundColor: loja.cor + "22", color: loja.cor }}
+            >
+              <LogoLoja loja={loja} tamanho={20} />
+              {loja.nome}
+            </span>
+          )}
+        </div>
         <input
           type="text"
           placeholder="Ex.: Compras Continente"

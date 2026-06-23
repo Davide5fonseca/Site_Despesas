@@ -132,6 +132,7 @@ export interface TalaoExtraido {
   data: string | null; // YYYY-MM-DD
   categoria_sugerida: string;
   confianca: "alta" | "media" | "baixa";
+  nif?: string | null; // NIF do emitente (vem do QR fiscal, quando existe)
 }
 
 // ───────────────────────────── Núcleo ─────────────────────────────
