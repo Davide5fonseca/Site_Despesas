@@ -49,7 +49,7 @@ const LOJAS: Loja[] = [
   { nome: "KFC", cor: "#a3080c", categoria: "Restauração", emoji: "🍗", dominio: "kfc.pt", padrao: /\bkfc\b/i },
   { nome: "Telepizza", cor: "#e2001a", categoria: "Restauração", emoji: "🍕", dominio: "telepizza.pt", padrao: /telepizza|pizza\s*hut|dominos|domino's/i },
   { nome: "Starbucks", cor: "#00704a", categoria: "Restauração", emoji: "☕", dominio: "starbucks.pt", padrao: /starbucks/i },
-  { nome: "Vitaminas", cor: "#7ac143", categoria: "Restauração", emoji: "🥗", padrao: /vitaminas|\bh3\b|\bnood\b/i },
+  { nome: "H3", cor: "#1a1a1a", categoria: "Restauração", emoji: "🍔", padrao: /\bh3\b/i },
 
   // ── Tecnologia / Lazer / Compras ──
   { nome: "Worten", cor: "#e2001a", categoria: "Lazer", emoji: "📺", dominio: "worten.pt", padrao: /worten/i },

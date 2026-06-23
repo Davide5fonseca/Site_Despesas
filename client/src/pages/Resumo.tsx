@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, Resumo as ResumoT } from "../api/client";
+import { api, getFamilia, Resumo as ResumoT } from "../api/client";
 import { formatarEuros, mesAtual } from "../lib/format";
 import { useAtualizarAuto } from "../lib/useAtualizar";
 import { useGrupo } from "../lib/grupo";
+import { exportarMesPDF } from "../lib/exportarPDF";
 import CabecalhoPagina from "../components/ui/CabecalhoPagina";
 import SeletorMes from "../components/ui/SeletorMes";
 import Secao from "../components/ui/Secao";
@@ -15,6 +16,7 @@ export default function Resumo() {
   const [mes, setMes] = useState(mesAtual());
   const [resumo, setResumo] = useState<ResumoT | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [exportando, setExportando] = useState(false);
 
   const carregar = useCallback(async () => {
     setErro(null);
@@ -29,6 +31,28 @@ export default function Resumo() {
     carregar();
   }, [carregar]);
   useAtualizarAuto(carregar);
+
+  async function exportar() {
+    setErro(null);
+    setExportando(true);
+    try {
+      const despesas = await api.listarDespesas({ mes });
+      if (despesas.length === 0) {
+        setErro("Não há despesas neste mês para exportar.");
+        return;
+      }
+      await exportarMesPDF({
+        mes,
+        nomeGrupo: getFamilia()?.nome ?? "ScanWise",
+        despesas,
+        solo,
+      });
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível gerar o PDF.");
+    } finally {
+      setExportando(false);
+    }
+  }
 
   return (
     <div className="palco space-y-4">
@@ -46,6 +70,24 @@ export default function Resumo() {
       />
 
       <SeletorMes mes={mes} onMes={setMes} />
+
+      {/* Exportar relatório do mês em PDF */}
+      <button
+        className="botao-secundario w-full"
+        onClick={exportar}
+        disabled={exportando || !resumo}
+      >
+        {exportando ? (
+          "A gerar PDF…"
+        ) : (
+          <>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Exportar PDF do mês
+          </>
+        )}
+      </button>
 
       {erro && (
         <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">

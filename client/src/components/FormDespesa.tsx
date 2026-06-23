@@ -16,6 +16,7 @@ export interface DadosIniciais {
   origem?: Origem;
   participantes?: number[]; // quem divide o custo
   talaoId?: string | null; // chave única do talão (scan) — para deteção de duplicados
+  ivaCentimos?: number | null; // IVA em cêntimos (do QR) — para o relatório
 }
 
 interface Props {
@@ -95,6 +96,7 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
       origem: inicial?.origem ?? "manual",
       participantes: participantesFinais,
       talao_id: inicial?.talaoId ?? null,
+      iva_centimos: inicial?.ivaCentimos ?? null,
       cliente_id: gerarClienteId(),
     };
 

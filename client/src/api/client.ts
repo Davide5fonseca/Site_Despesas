@@ -76,6 +76,7 @@ export interface Despesa {
   membro_nome: string | null;
   participantes: number[]; // membros que dividem o custo
   talao_id?: string | null; // chave única do talão (ATCUD/nº doc), quando veio de scan
+  iva_centimos?: number | null; // IVA em cêntimos (do QR), para o relatório
 }
 
 export interface DespesaInput {
@@ -88,6 +89,7 @@ export interface DespesaInput {
   participantes: number[];
   talao_id?: string | null;
   cliente_id?: string; // id gerado no cliente — idempotência da captura offline
+  iva_centimos?: number | null; // IVA em cêntimos (do QR)
 }
 
 // Id único do cliente para idempotência (offline + duplo-toque).
@@ -192,6 +194,7 @@ export interface TalaoExtraido {
   confianca: "alta" | "media" | "baixa";
   nif?: string | null; // NIF do emitente (vem do QR fiscal, quando existe)
   talaoId?: string | null; // chave única do talão (ATCUD/nº doc) — deteção de duplicados
+  iva?: number | null; // IVA em euros (do QR), para o relatório
 }
 
 // ───────────────────────────── Núcleo ─────────────────────────────

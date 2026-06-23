@@ -68,6 +68,7 @@ export default function NovaDespesa({ categorias, membros, onGuardado, variante 
       data: dados.data ?? hojeISO(),
       origem: "talao",
       talaoId: dados.talaoId ?? null,
+      ivaCentimos: dados.iva != null ? Math.round(dados.iva * 100) : null,
     });
     setTalao({ confianca: dados.confianca, camposEmFalta });
 

@@ -17,11 +17,12 @@ const DespesaInput = z.object({
   talao_id: z.string().trim().max(120).nullable().optional(),
   // Aceita UUID v4 ou o id de recurso do cliente; rejeita lixo/vazio.
   cliente_id: z.string().trim().regex(/^[A-Za-z0-9_-]{16,80}$/, "cliente_id inválido").optional(),
+  iva_centimos: z.number().int().nonnegative().nullable().optional(),
 });
 
 const SELECT_BASE = `
   SELECT
-    d.id, d.valor_centimos, d.descricao, d.data, d.origem, d.criado_em, d.talao_id,
+    d.id, d.valor_centimos, d.descricao, d.data, d.origem, d.criado_em, d.talao_id, d.iva_centimos,
     d.categoria_id, c.nome AS categoria_nome, c.cor AS categoria_cor,
     d.membro_id, m.nome AS membro_nome,
     COALESCE(
@@ -128,11 +129,11 @@ despesasRouter.post(
       // Idempotência: com cliente_id, reenvios do mesmo item não duplicam.
       // (O índice único é parcial — cliente_id NULL nunca entra em conflito.)
       const ins = await c.query<{ id: number }>(
-        `INSERT INTO despesas (familia_id, valor_centimos, descricao, categoria_id, membro_id, data, origem, talao_id, cliente_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `INSERT INTO despesas (familia_id, valor_centimos, descricao, categoria_id, membro_id, data, origem, talao_id, cliente_id, iva_centimos)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          ON CONFLICT (familia_id, cliente_id) WHERE cliente_id IS NOT NULL DO NOTHING
          RETURNING id`,
-        [familiaId, d.valor_centimos, d.descricao, d.categoria_id ?? null, d.membro_id ?? null, d.data, d.origem, d.talao_id ?? null, d.cliente_id ?? null]
+        [familiaId, d.valor_centimos, d.descricao, d.categoria_id ?? null, d.membro_id ?? null, d.data, d.origem, d.talao_id ?? null, d.cliente_id ?? null, d.iva_centimos ?? null]
       );
 
       // Sem linha devolvida => conflito: a despesa já existe. Devolve-a sem duplicar.
@@ -186,9 +187,9 @@ despesasRouter.put(
       const upd = await c.query(
         `UPDATE despesas
            SET valor_centimos = $1, descricao = $2, categoria_id = $3, membro_id = $4, data = $5, origem = $6,
-               talao_id = COALESCE($7, talao_id)
-         WHERE id = $8 AND familia_id = $9`,
-        [d.valor_centimos, d.descricao, d.categoria_id ?? null, d.membro_id ?? null, d.data, d.origem, d.talao_id ?? null, id, familiaId]
+               talao_id = COALESCE($7, talao_id), iva_centimos = COALESCE($8, iva_centimos)
+         WHERE id = $9 AND familia_id = $10`,
+        [d.valor_centimos, d.descricao, d.categoria_id ?? null, d.membro_id ?? null, d.data, d.origem, d.talao_id ?? null, d.iva_centimos ?? null, id, familiaId]
       );
       if (upd.rowCount === 0) return null;
       await c.query("DELETE FROM despesa_membros WHERE despesa_id = $1", [id]);

@@ -219,6 +219,9 @@ export async function migrate() {
     -- quando presente; NULL nas despesas antigas/sem captura offline.
     ALTER TABLE despesas ADD COLUMN IF NOT EXISTS cliente_id TEXT;
 
+    -- IVA em cêntimos (do QR fiscal), para o relatório. NULL em manuais/sem QR.
+    ALTER TABLE despesas ADD COLUMN IF NOT EXISTS iva_centimos INTEGER;
+
     -- Registo de que mês de cada fixa já foi gerado (evita duplicar)
     CREATE TABLE IF NOT EXISTS geracoes_fixas (
       despesa_fixa_id INTEGER NOT NULL REFERENCES despesas_fixas(id) ON DELETE CASCADE,

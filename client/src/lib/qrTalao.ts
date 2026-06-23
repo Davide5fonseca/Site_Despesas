@@ -6,11 +6,12 @@ import type { TalaoExtraido } from "../api/client";
 //   A = NIF do emitente (loja)   F = data (AAAAMMDD)   O = total com impostos
 //   G = identificação única do documento   H = ATCUD (código único do documento)
 export interface TalaoQR {
-  valor: number | null; // euros
-  data: string | null; // YYYY-MM-DD
-  nif: string | null; // NIF do emitente
+  valor: number | null; // euros — campo O (total com impostos)
+  data: string | null; // YYYY-MM-DD — campo F
+  nif: string | null; // NIF do emitente — campo A
   atcud: string | null; // campo H — código único do documento
   docId: string | null; // campo G — nº/identificação do documento
+  iva: number | null; // euros — campo N (total de impostos), ou soma do IVA por taxa
 }
 
 // Lê o QR de uma imagem. Devolve null se não houver QR fiscal reconhecível.
@@ -38,6 +39,7 @@ export function mesclarQR(base: TalaoExtraido, qr: TalaoQR): TalaoExtraido {
     data: qr.data ?? base.data,
     nif: qr.nif ?? base.nif ?? null,
     talaoId: talaoIdDoQR(qr) ?? base.talaoId ?? null,
+    iva: qr.iva ?? base.iva ?? null,
     confianca: qr.valor !== null ? "alta" : base.confianca,
   };
 }
@@ -125,7 +127,20 @@ export function parseQRFiscal(texto: string): TalaoQR | null {
     nif: campos.A,
     atcud: campos.H || null,
     docId: campos.G || null,
+    iva: ivaDoQR(campos),
   };
+}
+
+// IVA do talão: campo N = "Total de impostos" (no retalho, é o IVA). Em falta,
+// soma o IVA por taxa (campos I4 + I6 + I8 do formato AT).
+function ivaDoQR(campos: Record<string, string>): number | null {
+  const n = campos.N ? paraNumero(campos.N) : null;
+  if (n !== null) return n;
+  const soma = ["I4", "I6", "I8"].reduce((acc, k) => {
+    const v = campos[k] ? paraNumero(campos[k]) : null;
+    return v !== null ? acc + v : acc;
+  }, 0);
+  return soma > 0 ? soma : null;
 }
 
 // O total no QR fiscal vem com ponto decimal: "23.45".
