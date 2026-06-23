@@ -1,7 +1,8 @@
 import { lazy, Suspense, useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import FamiliaGate from "./components/FamiliaGate";
-import { Familia, getFamilia } from "./api/client";
+import { api, Familia, getFamilia } from "./api/client";
+import { GrupoProvider, useGrupo } from "./lib/grupo";
 
 // Lazy-load das páginas: o Recharts (gráficos) só carrega ao abrir o Resumo,
 // deixando o arranque inicial muito mais leve.
@@ -10,19 +11,30 @@ const Resumo = lazy(() => import("./pages/Resumo"));
 const PorPessoa = lazy(() => import("./pages/PorPessoa"));
 const Definicoes = lazy(() => import("./pages/Definicoes"));
 
-const itensNav = [
-  { para: "/inicio", rotulo: "Início", Icone: IconeCasa },
-  { para: "/resumo", rotulo: "Resumo", Icone: IconeGrafico },
-  { para: "/pessoas", rotulo: "Pessoas", Icone: IconePessoas },
-  { para: "/definicoes", rotulo: "Definições", Icone: IconeEngrenagem },
-];
-
 export default function App() {
   const [familia, setFamiliaState] = useState<Familia | null>(getFamilia());
 
   if (!familia) {
     return <FamiliaGate onPronto={setFamiliaState} />;
   }
+
+  return (
+    <GrupoProvider>
+      <Autenticado />
+    </GrupoProvider>
+  );
+}
+
+function Autenticado() {
+  const { solo } = useGrupo();
+
+  // A tab "Pessoas" só faz sentido com mais do que uma pessoa.
+  const itensNav = [
+    { para: "/inicio", rotulo: "Início", Icone: IconeCasa },
+    { para: "/resumo", rotulo: "Resumo", Icone: IconeGrafico },
+    ...(solo ? [] : [{ para: "/pessoas", rotulo: "Pessoas", Icone: IconePessoas }]),
+    { para: "/definicoes", rotulo: "Definições", Icone: IconeEngrenagem },
+  ];
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col overflow-x-hidden">
@@ -35,12 +47,15 @@ export default function App() {
             <Route path="/" element={<Navigate to="/inicio" replace />} />
             <Route path="/inicio" element={<Inicio />} />
             <Route path="/resumo" element={<Resumo />} />
-            <Route path="/pessoas" element={<PorPessoa />} />
+            {/* Solo não tem página Pessoas — redireciona para o Início. */}
+            <Route path="/pessoas" element={solo ? <Navigate to="/inicio" replace /> : <PorPessoa />} />
             <Route path="/definicoes" element={<Definicoes />} />
             <Route path="*" element={<Navigate to="/inicio" replace />} />
           </Routes>
         </Suspense>
       </main>
+
+      <GuardaNomeReal />
 
       {/* Navegação inferior flutuante */}
       <nav
@@ -82,6 +97,59 @@ function Carregando() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
       <span className="h-8 w-8 animate-spin rounded-full border-2 border-marca-400 border-t-transparent" />
+    </div>
+  );
+}
+
+// Quando um grupo solo passa a ter 2+ pessoas e o "eu" deste dispositivo ainda
+// tem o nome default "Eu", obriga a escolher o nome real — senão os outros veem
+// "Eu pagou X€" sem saber de quem é. Overlay bloqueante (sem fechar).
+function GuardaNomeReal() {
+  const { solo, membros, membroAtualId, recarregar } = useGrupo();
+  const eu = membros.find((m) => m.id === membroAtualId);
+  const precisa = !solo && eu != null && eu.nome.trim().toLowerCase() === "eu";
+
+  const [nome, setNome] = useState("");
+  const [aGuardar, setAGuardar] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  if (!precisa) return null;
+
+  async function guardar() {
+    const n = nome.trim();
+    if (!n) return setErro("Escreve o teu nome.");
+    setErro(null);
+    setAGuardar(true);
+    try {
+      await api.editarMembro(eu!.id, n);
+      await recarregar();
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível guardar.");
+      setAGuardar(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-5 backdrop-blur-sm">
+      <div className="cartao w-full max-w-sm p-6">
+        <h2 className="text-lg font-bold text-slate-100">Como te chamas?</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Agora são mais do que um. Escolhe o teu nome para os outros saberem quem registou cada
+          despesa.
+        </p>
+        <input
+          className="campo mt-4"
+          autoFocus
+          placeholder="O teu nome"
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && guardar()}
+        />
+        {erro && <p className="mt-2 text-sm text-red-300">{erro}</p>}
+        <button className="botao-primario mt-4 w-full" onClick={guardar} disabled={aGuardar}>
+          {aGuardar ? "A guardar…" : "Continuar"}
+        </button>
+      </div>
     </div>
   );
 }

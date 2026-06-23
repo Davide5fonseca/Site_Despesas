@@ -1,12 +1,19 @@
 import { Router } from "express";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { criarFamilia, obterFamiliaPorCodigo, obterFamiliaComPin, ah } from "../db.js";
+import {
+  criarFamilia,
+  obterFamiliaPorCodigo,
+  obterFamiliaComPin,
+  apagarFamiliaPorCodigo,
+  contarMembros,
+  ah,
+} from "../db.js";
 
 export const familiasRouter = Router();
 
 const CriarInput = z.object({
-  nome: z.string().trim().min(1, "Indica um nome para a família").max(60),
+  nome: z.string().trim().min(1, "Indica um nome").max(60),
   pin: z.string().trim().min(4, "O PIN deve ter pelo menos 4 caracteres").max(12).optional(),
 });
 const EntrarInput = z.object({
@@ -46,6 +53,40 @@ familiasRouter.post(
     }
     // Nunca devolver o pin_hash
     res.json({ id: familia.id, codigo: familia.codigo, nome: familia.nome });
+  })
+);
+
+// DELETE /api/familias  -> apaga o grupo atual (via cabeçalho x-familia-codigo).
+// SEGURANÇA: o código é a chave que se PARTILHA para convidar — não chega para
+// autorizar uma deleção em cascata. Por isso:
+//   - só grupos INDIVIDUAIS (<= 1 membro) podem ser apagados aqui;
+//   - grupos de 2+ membros são recusados (403) — sem caminho de deleção por agora;
+//   - defesa em profundidade: se o grupo tiver PIN, exige-o e valida-o.
+familiasRouter.delete(
+  "/",
+  ah(async (req, res) => {
+    const codigo = req.header("x-familia-codigo");
+    if (!codigo) return res.status(401).json({ erro: "Sem grupo." });
+
+    const familia = await obterFamiliaComPin(codigo);
+    if (!familia) return res.status(404).json({ erro: "Grupo não encontrado." });
+
+    const nMembros = await contarMembros(familia.id);
+    if (nMembros > 1) {
+      return res.status(403).json({ erro: "Só é possível apagar um grupo individual." });
+    }
+
+    if (familia.pin_hash) {
+      const pin = (req.body?.pin ?? "").toString().trim();
+      if (!pin) {
+        return res.status(401).json({ erro: "Este grupo tem PIN.", pinNecessario: true });
+      }
+      const ok = await bcrypt.compare(pin, familia.pin_hash);
+      if (!ok) return res.status(401).json({ erro: "PIN incorreto.", pinNecessario: true });
+    }
+
+    await apagarFamiliaPorCodigo(codigo);
+    res.status(204).end();
   })
 );
 

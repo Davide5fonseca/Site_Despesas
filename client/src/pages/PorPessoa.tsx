@@ -100,7 +100,7 @@ export default function PorPessoa() {
 
       {!carregando && membros.length === 0 && (
         <div className="cartao p-8 text-center text-slate-400">
-          <p className="text-sm">Ainda não há membros na família.</p>
+          <p className="text-sm">Ainda não há membros no grupo.</p>
           <p className="mt-1 text-xs text-slate-500">Adiciona membros em Definições.</p>
         </div>
       )}

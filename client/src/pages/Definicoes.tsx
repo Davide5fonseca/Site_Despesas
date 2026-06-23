@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, Categoria, Membro, getFamilia, setFamilia } from "../api/client";
+import { api, Categoria, Membro, getFamilia, setFamilia, setMembroAtual } from "../api/client";
+import { useGrupo } from "../lib/grupo";
 import BotaoTema from "../components/BotaoTema";
 import Modal from "../components/Modal";
 import CabecalhoPagina from "../components/ui/CabecalhoPagina";
@@ -15,6 +16,12 @@ const IconeLixo = () => (
     <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
   </svg>
 );
+const IconePessoaMais = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <circle cx="9" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+    <path d="M3.5 19a5.5 5.5 0 0 1 10 0M18 8v6M15 11h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
 
 const CORES = [
   "#16a34a", "#7c3aed", "#0ea5e9", "#f59e0b",
@@ -23,6 +30,8 @@ const CORES = [
 ];
 
 export default function Definicoes() {
+  const { solo, recarregar: recarregarGrupo } = useGrupo();
+
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [membros, setMembros] = useState<Membro[]>([]);
 
@@ -38,6 +47,15 @@ export default function Definicoes() {
   const [edNome, setEdNome] = useState("");
   const [edCor, setEdCor] = useState(CORES[0]);
 
+  // Conta / grupo
+  const [convidar, setConvidar] = useState(false);
+  const [apagarAberto, setApagarAberto] = useState(false);
+  const [apagarPasso, setApagarPasso] = useState<1 | 2>(1);
+  const [apagando, setApagando] = useState(false);
+  const [pinApagar, setPinApagar] = useState("");
+  const [precisaPinApagar, setPrecisaPinApagar] = useState(false);
+  const [erroApagar, setErroApagar] = useState<string | null>(null);
+
   async function carregar() {
     const [c, m] = await Promise.all([api.listarCategorias(), api.listarMembros()]);
     setCategorias(c);
@@ -47,6 +65,12 @@ export default function Definicoes() {
     carregar();
   }, []);
 
+  // Sempre que o nº de membros muda, sincroniza o contexto (nav, solo, defaults).
+  async function recarregarTudo() {
+    await carregar();
+    await recarregarGrupo();
+  }
+
   async function adicionarMembro() {
     const nome = novoMembro.trim();
     if (!nome) return;
@@ -54,7 +78,7 @@ export default function Definicoes() {
     try {
       await api.criarMembro(nome);
       setNovoMembro("");
-      carregar();
+      recarregarTudo();
     } catch (e: any) {
       setErro(e?.message || "Falha ao adicionar membro.");
     }
@@ -76,7 +100,7 @@ export default function Definicoes() {
   async function apagarMembro(id: number) {
     if (!confirm("Apagar este membro? As despesas associadas ficam sem pessoa.")) return;
     await api.apagarMembro(id);
-    carregar();
+    recarregarTudo();
   }
 
   async function apagarCategoria(id: number) {
@@ -92,7 +116,7 @@ export default function Definicoes() {
     try {
       await api.editarMembro(membroEditId, nome);
       setMembroEditId(null);
-      carregar();
+      recarregarTudo();
     } catch (e: any) {
       setErro(e?.message || "Falha ao guardar membro.");
     }
@@ -123,38 +147,109 @@ export default function Definicoes() {
   function copiarCodigo() {
     if (familia) navigator.clipboard?.writeText(familia.codigo).catch(() => {});
   }
-  function sairDaFamilia() {
-    if (!confirm("Sair desta família neste dispositivo? Vais voltar ao ecrã inicial.")) return;
+
+  // Grupo (2+): só "esquece" neste dispositivo; pode voltar a entrar com o código.
+  function sairDoGrupo() {
+    if (!confirm("Sair do grupo neste dispositivo? Podes voltar a entrar com o código.")) return;
     setFamilia(null);
     location.reload();
   }
 
+  // Solo: apagar mesmo os dados (destrutivo, confirmação dupla).
+  function fecharApagar() {
+    setApagarAberto(false);
+    setApagarPasso(1);
+    setPinApagar("");
+    setPrecisaPinApagar(false);
+    setErroApagar(null);
+  }
+  async function confirmarApagar() {
+    setApagando(true);
+    setErroApagar(null);
+    try {
+      await api.apagarFamilia(pinApagar.trim() || undefined);
+      setMembroAtual(null);
+      setFamilia(null);
+      location.reload();
+    } catch (e: any) {
+      setApagando(false);
+      if (e?.pinNecessario) {
+        setPrecisaPinApagar(true);
+        setErroApagar("Este grupo tem PIN. Escreve-o para apagar.");
+      } else {
+        setErroApagar(e?.message || "Não foi possível apagar os dados.");
+      }
+    }
+  }
+
   return (
     <div className="palco space-y-6">
-      <CabecalhoPagina titulo="Definições" subtitulo="Família, aparência, membros e categorias" />
+      <CabecalhoPagina titulo="Definições" subtitulo="Conta, aparência, membros e categorias" />
 
-      {/* Família */}
+      {/* Conta / grupo */}
       {familia && (
         <section className="cartao p-5">
           <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
-            A tua família
+            {solo ? "A minha conta" : "O teu grupo"}
           </h2>
           <p className="text-lg font-bold text-slate-100">{familia.nome}</p>
-          <p className="mt-3 text-xs text-slate-400">Código para outros entrarem:</p>
-          <div className="mt-1 flex items-center gap-2">
-            <span className="flex-1 rounded-xl border border-dashed border-marca-500/40 bg-noite-900/50 py-2 text-center text-xl font-extrabold tracking-[0.25em] text-slate-100">
-              {familia.codigo}
-            </span>
-            <button className="botao-secundario px-4 py-2.5" onClick={copiarCodigo}>
-              Copiar
-            </button>
-          </div>
-          <button
-            className="mt-4 w-full rounded-2xl border border-red-500/30 bg-red-500/10 py-3 text-sm font-semibold text-red-400 transition hover:bg-red-500/20 active:scale-[0.99]"
-            onClick={sairDaFamilia}
-          >
-            Sair desta família
-          </button>
+
+          {solo ? (
+            <>
+              {!convidar ? (
+                <button
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-marca-500/10 py-3 text-sm font-semibold text-marcatxt transition hover:bg-marca-500/15 active:scale-[0.99]"
+                  onClick={() => setConvidar(true)}
+                >
+                  <IconePessoaMais /> Convidar alguém
+                </button>
+              ) : (
+                <div className="mt-4">
+                  <p className="text-xs text-slate-400">
+                    Este é o teu <span className="text-slate-300">código de acesso</span>. Partilha-o
+                    para convidar alguém, ou guarda-o para entrares noutro dispositivo — sem ele não
+                    há como recuperar os dados.
+                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="flex-1 rounded-xl border border-dashed border-marca-500/40 bg-noite-900/50 py-2 text-center text-xl font-extrabold tracking-[0.25em] text-slate-100">
+                      {familia.codigo}
+                    </span>
+                    <button className="botao-secundario px-4 py-2.5" onClick={copiarCodigo}>
+                      Copiar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <button
+                className="mt-3 w-full rounded-2xl border border-red-500/30 bg-red-500/10 py-3 text-sm font-semibold text-red-400 transition hover:bg-red-500/20 active:scale-[0.99]"
+                onClick={() => {
+                  setApagarPasso(1);
+                  setApagarAberto(true);
+                }}
+              >
+                Apagar os meus dados
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="mt-3 text-xs text-slate-400">Código para outros entrarem:</p>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="flex-1 rounded-xl border border-dashed border-marca-500/40 bg-noite-900/50 py-2 text-center text-xl font-extrabold tracking-[0.25em] text-slate-100">
+                  {familia.codigo}
+                </span>
+                <button className="botao-secundario px-4 py-2.5" onClick={copiarCodigo}>
+                  Copiar
+                </button>
+              </div>
+              <button
+                className="mt-4 w-full rounded-2xl border border-red-500/30 bg-red-500/10 py-3 text-sm font-semibold text-red-400 transition hover:bg-red-500/20 active:scale-[0.99]"
+                onClick={sairDoGrupo}
+              >
+                Sair do grupo
+              </button>
+            </>
+          )}
         </section>
       )}
 
@@ -175,9 +270,7 @@ export default function Definicoes() {
 
       {/* Membros */}
       <section className="cartao p-5">
-        <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
-          Membros da casa
-        </h2>
+        <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Membros</h2>
 
         <div className="flex gap-2">
           <input
@@ -358,6 +451,61 @@ export default function Definicoes() {
               Guardar
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Modal: apagar os meus dados (confirmação dupla) */}
+      <Modal titulo="Apagar os meus dados" aberto={apagarAberto} onFechar={fecharApagar}>
+        <div className="space-y-4">
+          {apagarPasso === 1 ? (
+            <>
+              <p className="text-sm text-slate-300">
+                Isto apaga <span className="font-semibold text-slate-100">tudo</span>: despesas,
+                despesas fixas, categorias e membros. Não há forma de recuperar.
+              </p>
+              <div className="flex gap-3 pt-1">
+                <button className="botao-secundario flex-1" onClick={fecharApagar}>
+                  Cancelar
+                </button>
+                <button className="botao-perigo flex-1" onClick={() => setApagarPasso(2)}>
+                  Continuar
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-300">
+                Tens mesmo a certeza? Esta ação é{" "}
+                <span className="font-semibold text-red-300">irreversível</span>.
+              </p>
+              {precisaPinApagar && (
+                <input
+                  className="campo text-center text-lg font-bold tracking-[0.3em]"
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="PIN"
+                  maxLength={12}
+                  autoFocus
+                  value={pinApagar}
+                  onChange={(e) => setPinApagar(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && confirmarApagar()}
+                />
+              )}
+              {erroApagar && (
+                <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                  {erroApagar}
+                </p>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button className="botao-secundario flex-1" onClick={fecharApagar} disabled={apagando}>
+                  Voltar atrás
+                </button>
+                <button className="botao-perigo flex-1" onClick={confirmarApagar} disabled={apagando}>
+                  {apagando ? "A apagar…" : "Sim, apagar tudo"}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </div>

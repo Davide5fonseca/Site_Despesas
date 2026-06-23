@@ -11,6 +11,7 @@ export interface Familia {
 }
 
 const FAMILIA_KEY = "despesas_familia";
+const MEMBRO_ATUAL_KEY = "despesas_membro_atual";
 
 export function getFamilia(): Familia | null {
   try {
@@ -23,7 +24,23 @@ export function getFamilia(): Familia | null {
 
 export function setFamilia(f: Familia | null) {
   if (f) localStorage.setItem(FAMILIA_KEY, JSON.stringify(f));
-  else localStorage.removeItem(FAMILIA_KEY);
+  else {
+    localStorage.removeItem(FAMILIA_KEY);
+    localStorage.removeItem(MEMBRO_ATUAL_KEY); // ao sair/apagar, esquece o "eu"
+  }
+}
+
+// "Eu" deste dispositivo: o id do membro que representa o utilizador atual.
+// Definido ao criar uma conta "Só para mim"; usado como default em "Quem pagou".
+export function getMembroAtual(): number | null {
+  const raw = localStorage.getItem(MEMBRO_ATUAL_KEY);
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+export function setMembroAtual(id: number | null) {
+  if (id == null) localStorage.removeItem(MEMBRO_ATUAL_KEY);
+  else localStorage.setItem(MEMBRO_ATUAL_KEY, String(id));
 }
 
 function cabecalhoFamilia(): Record<string, string> {
@@ -185,6 +202,29 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ nome, pin: pin || undefined }),
     });
+  },
+  // Apaga o grupo atual (em cascata). Só o servidor decide se é permitido
+  // (apenas grupos individuais; PIN obrigatório se existir). Lança Error com
+  // .pinNecessario quando o grupo exige PIN.
+  async apagarFamilia(pin?: string): Promise<void> {
+    const resposta = await fetch(`${BASE}/familias`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", ...cabecalhoFamilia() },
+      body: JSON.stringify({ pin: pin || undefined }),
+    });
+    if (!resposta.ok) {
+      let corpo: any = {};
+      try {
+        corpo = await resposta.json();
+      } catch {
+        /* sem corpo */
+      }
+      const err = new Error(
+        typeof corpo?.erro === "string" ? corpo.erro : `Erro ${resposta.status}`
+      ) as Error & { pinNecessario?: boolean };
+      err.pinNecessario = !!corpo?.pinNecessario;
+      throw err;
+    }
   },
   // Devolve a família; em erro lança Error com .pinNecessario quando aplicável.
   async entrarFamilia(codigo: string, pin?: string): Promise<Familia> {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, Categoria, DespesaFixa, Membro } from "../api/client";
 import { formatarNumero, parseEurosParaCentimos } from "../lib/format";
+import { useGrupo } from "../lib/grupo";
 
 interface Props {
   categorias: Categoria[];
@@ -11,13 +12,18 @@ interface Props {
 }
 
 export default function FormFixa({ categorias, membros, inicial, onGuardado, onFechar }: Props) {
+  const { solo, membroAtualId } = useGrupo();
+
   const [valor, setValor] = useState(inicial ? formatarNumero(inicial.valor_centimos) : "");
   const [descricao, setDescricao] = useState(inicial?.descricao ?? "");
   const [categoriaId, setCategoriaId] = useState<number | "">(inicial?.categoria_id ?? "");
-  const [membroId, setMembroId] = useState<number | "">(inicial?.membro_id ?? "");
+  const [membroId, setMembroId] = useState<number | "">(
+    inicial?.membro_id ?? membroAtualId ?? ""
+  );
   const [dia, setDia] = useState<number>(inicial?.dia ?? 1);
   const [participantes, setParticipantes] = useState<number[]>(
-    inicial?.participantes ?? membros.map((m) => m.id)
+    inicial?.participantes ??
+      (membroAtualId != null ? [membroAtualId] : membros.map((m) => m.id))
   );
   const [ativa, setAtiva] = useState<boolean>(inicial?.ativa ?? true);
   const [aGuardar, setAGuardar] = useState(false);
@@ -33,13 +39,19 @@ export default function FormFixa({ categorias, membros, inicial, onGuardado, onF
     if (centimos === null) return setErro("Indica um valor válido (ex.: 7,99).");
     setAGuardar(true);
     try {
+      const participantesFinais = solo
+        ? membroAtualId != null
+          ? [membroAtualId]
+          : membros.map((m) => m.id)
+        : participantes;
+
       const payload = {
         valor_centimos: centimos,
         descricao: descricao.trim(),
         categoria_id: categoriaId === "" ? null : Number(categoriaId),
         membro_id: membroId === "" ? null : Number(membroId),
         dia: Math.min(Math.max(Math.round(dia) || 1, 1), 31),
-        participantes,
+        participantes: participantesFinais,
         ativa,
       };
       if (editar) await api.editarFixa(inicial!.id, payload);
@@ -123,7 +135,7 @@ export default function FormFixa({ categorias, membros, inicial, onGuardado, onF
         </select>
       </div>
 
-      {membros.length > 0 && (
+      {!solo && membros.length > 0 && (
         <div>
           <div className="mb-1.5 flex items-center justify-between">
             <label className="rotulo mb-0">Dividir por</label>

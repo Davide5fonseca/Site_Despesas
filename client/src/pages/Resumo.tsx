@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, Resumo as ResumoT } from "../api/client";
 import { formatarEuros, mesAtual } from "../lib/format";
 import { useAtualizarAuto } from "../lib/useAtualizar";
+import { useGrupo } from "../lib/grupo";
 import CabecalhoPagina from "../components/ui/CabecalhoPagina";
 import SeletorMes from "../components/ui/SeletorMes";
 import Secao from "../components/ui/Secao";
@@ -10,6 +11,7 @@ import GraficoCategorias from "../components/GraficoCategorias";
 import GraficoMensal from "../components/GraficoMensal";
 
 export default function Resumo() {
+  const { solo } = useGrupo();
   const [mes, setMes] = useState(mesAtual());
   const [resumo, setResumo] = useState<ResumoT | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -67,40 +69,42 @@ export default function Resumo() {
         )}
       </Secao>
 
-      {/* Total por pessoa */}
-      <Secao titulo="Total por pessoa" icone={<IconePessoas />}>
-        {!resumo ? (
-          <div className="space-y-3">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-7 w-full" />
-            ))}
-          </div>
-        ) : resumo.porPessoa.length && resumo.total > 0 ? (
-          <ul className="space-y-3">
-            {resumo.porPessoa.map((p) => {
-              const pct = resumo.total > 0 ? (p.total / resumo.total) * 100 : 0;
-              return (
-                <li key={`${p.membro_id}`}>
-                  <div className="mb-1 flex items-center justify-between text-sm">
-                    <span className="font-medium text-slate-200">{p.nome}</span>
-                    <span className="font-semibold tabular-nums text-slate-100">
-                      {formatarEuros(p.total)}
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-noite-700">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-marca-500 to-marca-300 transition-all"
-                      style={{ width: `${Math.max(pct, 3)}%` }}
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="py-4 text-center text-sm text-slate-500">Sem despesas neste mês.</p>
-        )}
-      </Secao>
+      {/* Total por pessoa — só em grupo (mais do que uma pessoa) */}
+      {!solo && (
+        <Secao titulo="Total por pessoa" icone={<IconePessoas />}>
+          {!resumo ? (
+            <div className="space-y-3">
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} className="h-7 w-full" />
+              ))}
+            </div>
+          ) : resumo.porPessoa.length && resumo.total > 0 ? (
+            <ul className="space-y-3">
+              {resumo.porPessoa.map((p) => {
+                const pct = resumo.total > 0 ? (p.total / resumo.total) * 100 : 0;
+                return (
+                  <li key={`${p.membro_id}`}>
+                    <div className="mb-1 flex items-center justify-between text-sm">
+                      <span className="font-medium text-slate-200">{p.nome}</span>
+                      <span className="font-semibold tabular-nums text-slate-100">
+                        {formatarEuros(p.total)}
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-noite-700">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-marca-500 to-marca-300 transition-all"
+                        style={{ width: `${Math.max(pct, 3)}%` }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="py-4 text-center text-sm text-slate-500">Sem despesas neste mês.</p>
+          )}
+        </Secao>
+      )}
 
       {/* Evolução mensal */}
       <Secao titulo="Últimos 6 meses" icone={<IconeBarras />}>

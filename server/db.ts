@@ -133,6 +133,23 @@ export async function obterFamiliaComPin(codigo: string): Promise<FamiliaComPin 
   );
 }
 
+// Apaga o grupo e tudo o que lhe pertence (cascata via ON DELETE CASCADE).
+export async function apagarFamiliaPorCodigo(codigo: string): Promise<boolean> {
+  const r = await pool.query("DELETE FROM familias WHERE codigo = $1", [
+    codigo.trim().toUpperCase(),
+  ]);
+  return (r.rowCount ?? 0) > 0;
+}
+
+// Nº de membros de um grupo (para proteger o DELETE: só apaga grupos individuais).
+export async function contarMembros(familiaId: number): Promise<number> {
+  const r = await um<{ n: number }>(
+    "SELECT COUNT(*)::int AS n FROM membros WHERE familia_id = $1",
+    [familiaId]
+  );
+  return r ? Number(r.n) : 0;
+}
+
 // ── Migração (cria tabelas se não existirem) ───────────────────────────────
 export async function migrate() {
   await pool.query(`

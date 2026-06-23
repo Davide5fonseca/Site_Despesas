@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, Categoria, Membro, Origem } from "../api/client";
 import { hojeISO, parseEurosParaCentimos } from "../lib/format";
 import { reconhecerLoja } from "../lib/lojas";
+import { useGrupo } from "../lib/grupo";
 import LogoLoja from "./LogoLoja";
 
 export interface DadosIniciais {
@@ -32,14 +33,22 @@ const corConfianca: Record<string, string> = {
 };
 
 export default function FormDespesa({ categorias, membros, inicial, talao, onGuardado, onFechar }: Props) {
+  const { solo, membroAtualId } = useGrupo();
+  const editar = inicial?.id != null;
+
   const [valor, setValor] = useState(inicial?.valorTexto ?? "");
   const [descricao, setDescricao] = useState(inicial?.descricao ?? "");
   const [categoriaId, setCategoriaId] = useState<number | "">(inicial?.categoria_id ?? "");
-  const [membroId, setMembroId] = useState<number | "">(inicial?.membro_id ?? "");
+  // "Quem pagou": ao criar, default = o utilizador atual (não "Ninguém").
+  const [membroId, setMembroId] = useState<number | "">(
+    inicial?.membro_id ?? membroAtualId ?? ""
+  );
   const [data, setData] = useState(inicial?.data ?? hojeISO());
-  // "Dividir por": por omissão todos os membros; ao editar, usa o que estava guardado.
+  // "Dividir por": ao editar usa o que estava guardado; ao criar, default = só eu
+  // (se souber quem sou), senão todos os membros.
   const [participantes, setParticipantes] = useState<number[]>(
-    inicial?.participantes ?? membros.map((m) => m.id)
+    inicial?.participantes ??
+      (membroAtualId != null ? [membroAtualId] : membros.map((m) => m.id))
   );
   const [aGuardar, setAGuardar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -47,7 +56,6 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
   const alternarParticipante = (id: number) =>
     setParticipantes((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
-  const editar = inicial?.id != null;
   const emFalta = (campo: string) => talao?.camposEmFalta.includes(campo);
   const loja = reconhecerLoja(descricao);
 
@@ -60,6 +68,14 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
     }
     setAGuardar(true);
     try {
+      // No solo a despesa fica atribuída ao próprio (participante = eu), mesmo
+      // sem o seletor "Dividir por" visível.
+      const participantesFinais = solo
+        ? membroAtualId != null
+          ? [membroAtualId]
+          : membros.map((m) => m.id)
+        : participantes;
+
       const payload = {
         valor_centimos: centimos,
         descricao: descricao.trim(),
@@ -67,7 +83,7 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
         membro_id: membroId === "" ? null : Number(membroId),
         data,
         origem: inicial?.origem ?? "manual",
-        participantes,
+        participantes: participantesFinais,
       };
       if (editar) await api.editarDespesa(inicial!.id!, payload);
       else await api.criarDespesa(payload);
@@ -83,9 +99,7 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
     <div className="space-y-4">
       {talao && (
         <div className={`rounded-2xl border px-4 py-3 text-sm ${corConfianca[talao.confianca]}`}>
-          <p className="font-semibold">
-            Talão lido · confiança {talao.confianca}
-          </p>
+          <p className="font-semibold">Talão lido · confiança {talao.confianca}</p>
           <p className="mt-0.5 opacity-90">
             {talao.camposEmFalta.length
               ? `Confirma os dados e preenche o que está em falta (${talao.camposEmFalta.join(", ")}).`
@@ -172,8 +186,8 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
         />
       </div>
 
-      {/* Dividir por (para "acertar contas") */}
-      {membros.length > 0 && (
+      {/* "Dividir por" (para "acertar contas") — só faz sentido em grupo. */}
+      {!solo && membros.length > 0 && (
         <div>
           <div className="mb-1.5 flex items-center justify-between">
             <label className="rotulo mb-0">Dividir por</label>
@@ -233,13 +247,6 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
             return null;
           })()}
         </div>
-      )}
-
-      {membros.length === 0 && (
-        <p className="text-xs text-slate-500">
-          Dica: adiciona membros da casa em <span className="text-slate-300">Definições</span> para
-          associar quem pagou.
-        </p>
       )}
 
       {erro && (
