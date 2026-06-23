@@ -1,8 +1,10 @@
 import { lazy, Suspense, useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import FamiliaGate from "./components/FamiliaGate";
+import BarraSync from "./components/BarraSync";
 import { api, Familia, getFamilia } from "./api/client";
 import { GrupoProvider, useGrupo } from "./lib/grupo";
+import { SyncProvider } from "./lib/sync";
 
 // Lazy-load das páginas: o Recharts (gráficos) só carrega ao abrir o Resumo,
 // deixando o arranque inicial muito mais leve.
@@ -20,7 +22,9 @@ export default function App() {
 
   return (
     <GrupoProvider>
-      <Autenticado />
+      <SyncProvider>
+        <Autenticado />
+      </SyncProvider>
     </GrupoProvider>
   );
 }
@@ -42,6 +46,7 @@ function Autenticado() {
         className="flex-1 px-4 pb-32"
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}
       >
+        <BarraSync />
         <Suspense fallback={<Carregando />}>
           <Routes>
             <Route path="/" element={<Navigate to="/inicio" replace />} />

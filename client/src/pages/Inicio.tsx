@@ -8,6 +8,7 @@ import {
   parseEurosParaCentimos,
 } from "../lib/format";
 import { useAtualizarAuto } from "../lib/useAtualizar";
+import { useSync } from "../lib/sync";
 import { deslocarMes } from "../components/ui/SeletorMes";
 import NovaDespesa from "../components/NovaDespesa";
 import ListaMovimentos from "../components/ListaMovimentos";
@@ -51,6 +52,12 @@ export default function Inicio() {
     carregar();
   }, [carregar]);
   useAtualizarAuto(carregar);
+
+  // Quando a fila offline acaba de sincronizar, recarrega para ver as novas despesas.
+  const { sincronizadoEm } = useSync();
+  useEffect(() => {
+    if (sincronizadoEm) carregar();
+  }, [sincronizadoEm, carregar]);
 
   const totalMes = despesas.reduce((s, d) => s + d.valor_centimos, 0);
 

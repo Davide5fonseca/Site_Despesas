@@ -75,6 +75,7 @@ export interface Despesa {
   membro_id: number | null;
   membro_nome: string | null;
   participantes: number[]; // membros que dividem o custo
+  talao_id?: string | null; // chave única do talão (ATCUD/nº doc), quando veio de scan
 }
 
 export interface DespesaInput {
@@ -85,6 +86,46 @@ export interface DespesaInput {
   data: string;
   origem: Origem;
   participantes: number[];
+  talao_id?: string | null;
+  cliente_id?: string; // id gerado no cliente — idempotência da captura offline
+}
+
+// Id único do cliente para idempotência (offline + duplo-toque).
+// Usa entropia REAL (UUID v4 via crypto). Dois dispositivos offline geram ids
+// diferentes — nunca um timestamp/contador que pudesse colidir.
+export function gerarClienteId(): string {
+  const c = typeof crypto !== "undefined" ? crypto : undefined;
+  if (c?.randomUUID) return c.randomUUID();
+  if (c?.getRandomValues) {
+    const b = c.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40; // versão 4
+    b[8] = (b[8] & 0x3f) | 0x80; // variante
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  }
+  // Último recurso (ambiente sem crypto): ainda com bastante aleatoriedade.
+  return `c-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+}
+
+// POST de despesa com um código de grupo explícito (usado pela fila offline,
+// que pode sincronizar itens de um grupo diferente do atual). Devolve o status
+// e o corpo (para ler sinais como `duplicado_talao`).
+export async function postDespesaSync(
+  codigo: string,
+  payload: DespesaInput
+): Promise<{ status: number; corpo: any }> {
+  const r = await fetch(`${BASE}/despesas`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-familia-codigo": codigo },
+    body: JSON.stringify(payload),
+  });
+  let corpo: any = null;
+  try {
+    corpo = await r.json();
+  } catch {
+    /* sem corpo */
+  }
+  return { status: r.status, corpo };
 }
 
 export interface DespesaFixa {
@@ -150,6 +191,7 @@ export interface TalaoExtraido {
   categoria_sugerida: string;
   confianca: "alta" | "media" | "baixa";
   nif?: string | null; // NIF do emitente (vem do QR fiscal, quando existe)
+  talaoId?: string | null; // chave única do talão (ATCUD/nº doc) — deteção de duplicados
 }
 
 // ───────────────────────────── Núcleo ─────────────────────────────
@@ -250,6 +292,10 @@ export const api = {
   },
 
   // Despesas
+  // Despesas já registadas com a mesma chave de talão (deteção de duplicados).
+  verificarTalao(talaoId: string) {
+    return pedir<Despesa[]>(`/despesas/por-talao?talaoId=${encodeURIComponent(talaoId)}`);
+  },
   listarDespesas(filtros: { mes?: string; categoria?: number | null } = {}) {
     const q = new URLSearchParams();
     if (filtros.mes) q.set("mes", filtros.mes);

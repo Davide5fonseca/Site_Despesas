@@ -1,9 +1,12 @@
 import type { TalaoExtraido } from "../api/client";
 
-// Lojas/marcas portuguesas conhecidas. Reconhecidas pelo NOME (do talão), para
-// dar nome canónico bonito, cor da marca (avatar) e sugestão de categoria.
-// Sem logótipos reais (são marcas registadas) — usamos a cor + um emoji,
-// funciona offline e sem problemas de direitos.
+// Lojas/marcas portuguesas conhecidas. Reconhecidas por NIF (do QR fiscal —
+// fiável) e/ou por NOME (do talão). Cada loja traz nome canónico, cor da marca
+// (avatar), domínio (logótipo real) e CATEGORIA default — a despesa entra já
+// pré-categorizada (editável).
+//
+// Mapa único e extensível: para ativar a auto-categoria por NIF, basta
+// preencher `nifs` numa loja (ver "COMO ADICIONAR NIFs" no fim do ficheiro).
 //
 // Nota: a categoria tem de existir nas categorias semeadas
 // (Supermercado, Restauração, Saúde, Transportes, Contas/Serviços, Lazer, Renda, Outros).
@@ -14,13 +17,14 @@ export interface Loja {
   emoji: string; // ícone de fallback (quando não há logo/internet)
   padrao: RegExp; // como reconhecer no nome do talão
   dominio?: string; // domínio da marca, para ir buscar o logótipo real em runtime
+  nifs?: string[]; // NIF(s) do emitente no QR fiscal — auto-categoria por NIF
 }
 
 const LOJAS: Loja[] = [
   // ── Supermercados ──
-  { nome: "Continente", cor: "#e2001a", categoria: "Supermercado", emoji: "🛒", dominio: "continente.pt", padrao: /continente|\bmodelo\b/i },
-  { nome: "Pingo Doce", cor: "#009640", categoria: "Supermercado", emoji: "🛒", dominio: "pingodoce.pt", padrao: /pingo\s*doce/i },
-  { nome: "Lidl", cor: "#0050aa", categoria: "Supermercado", emoji: "🛒", dominio: "lidl.pt", padrao: /\blidl\b/i },
+  { nome: "Continente", cor: "#e2001a", categoria: "Supermercado", emoji: "🛒", dominio: "continente.pt", nifs: ["502011475", "501591109"], padrao: /continente|\bmodelo\b/i },
+  { nome: "Pingo Doce", cor: "#009640", categoria: "Supermercado", emoji: "🛒", dominio: "pingodoce.pt", nifs: ["500829993"], padrao: /pingo\s*doce/i },
+  { nome: "Lidl", cor: "#0050aa", categoria: "Supermercado", emoji: "🛒", dominio: "lidl.pt", nifs: ["503340855"], padrao: /\blidl\b/i },
   { nome: "Aldi", cor: "#001e96", categoria: "Supermercado", emoji: "🛒", dominio: "aldi.pt", padrao: /\baldi\b/i },
   { nome: "Minipreço", cor: "#e30613", categoria: "Supermercado", emoji: "🛒", dominio: "minipreco.pt", padrao: /minipre[çc]o/i },
   { nome: "Auchan", cor: "#e2001a", categoria: "Supermercado", emoji: "🛒", dominio: "auchan.pt", padrao: /auchan|jumbo/i },
@@ -71,6 +75,14 @@ const LOJAS: Loja[] = [
   { nome: "Águas", cor: "#00a3e0", categoria: "Contas/Serviços", emoji: "💧", padrao: /\bepal\b|\bsmas\b|[áa]guas\s+d[eo]\b/i },
 ];
 
+// Reconhece a loja pelo NIF do emitente (campo A do QR fiscal). Fiável.
+export function reconhecerLojaPorNif(nif?: string | null): Loja | null {
+  if (!nif) return null;
+  const n = nif.trim();
+  for (const l of LOJAS) if (l.nifs?.includes(n)) return l;
+  return null;
+}
+
 // Reconhece a loja a partir de um texto (nome do talão / descrição). null se nenhuma.
 export function reconhecerLoja(texto?: string | null): Loja | null {
   if (!texto) return null;
@@ -79,8 +91,19 @@ export function reconhecerLoja(texto?: string | null): Loja | null {
 }
 
 // Se reconhecermos a loja, melhora o nome (canónico) e a categoria sugerida.
+// Prioridade: NIF (do QR, exato) > nome (do OCR, difuso).
 export function enriquecerLoja(dados: TalaoExtraido): TalaoExtraido {
-  const l = reconhecerLoja(dados.loja);
+  const l = reconhecerLojaPorNif(dados.nif) ?? reconhecerLoja(dados.loja);
   if (!l) return dados;
   return { ...dados, loja: l.nome, categoria_sugerida: l.categoria };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// COMO ADICIONAR NIFs (auto-categoria por NIF):
+//   Acrescenta `nifs: ["500000000"]` à loja correspondente acima.
+//   Ex.:  { nome: "Continente", ..., nifs: ["NIF_REAL_AQUI"] }
+//   O NIF é o campo A do QR fiscal (9 dígitos). Confirma o NIF real no talão
+//   antes de adicionar — um NIF errado atribui a loja/categoria errada.
+// Enquanto `nifs` estiver vazio, a categoria continua a vir do reconhecimento
+// por NOME (que já funciona); o NIF é a camada mais fiável quando preenchida.
+// ─────────────────────────────────────────────────────────────────────────

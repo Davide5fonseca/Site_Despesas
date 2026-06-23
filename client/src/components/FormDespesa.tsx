@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { api, Categoria, Membro, Origem } from "../api/client";
+import { api, Categoria, Membro, Origem, gerarClienteId, getFamilia } from "../api/client";
 import { hojeISO, parseEurosParaCentimos } from "../lib/format";
 import { reconhecerLoja } from "../lib/lojas";
 import { useGrupo } from "../lib/grupo";
+import { useSync } from "../lib/sync";
 import LogoLoja from "./LogoLoja";
 
 export interface DadosIniciais {
@@ -14,6 +15,7 @@ export interface DadosIniciais {
   data?: string; // YYYY-MM-DD
   origem?: Origem;
   participantes?: number[]; // quem divide o custo
+  talaoId?: string | null; // chave única do talão (scan) — para deteção de duplicados
 }
 
 interface Props {
@@ -32,8 +34,16 @@ const corConfianca: Record<string, string> = {
   baixa: "text-red-300 bg-red-500/10 border-red-500/30",
 };
 
+// Falha por falta de rede? (offline ou fetch que rebenta antes de resposta)
+function semRede(e: any): boolean {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return true;
+  const msg = String(e?.message || e || "").toLowerCase();
+  return e?.name === "TypeError" || /failed to fetch|network|load failed/.test(msg);
+}
+
 export default function FormDespesa({ categorias, membros, inicial, talao, onGuardado, onFechar }: Props) {
   const { solo, membroAtualId } = useGrupo();
+  const { enfileirar } = useSync();
   const editar = inicial?.id != null;
 
   const [valor, setValor] = useState(inicial?.valorTexto ?? "");
@@ -67,29 +77,49 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
       return;
     }
     setAGuardar(true);
-    try {
-      // No solo a despesa fica atribuída ao próprio (participante = eu), mesmo
-      // sem o seletor "Dividir por" visível.
-      const participantesFinais = solo
-        ? membroAtualId != null
-          ? [membroAtualId]
-          : membros.map((m) => m.id)
-        : participantes;
 
-      const payload = {
-        valor_centimos: centimos,
-        descricao: descricao.trim(),
-        categoria_id: categoriaId === "" ? null : Number(categoriaId),
-        membro_id: membroId === "" ? null : Number(membroId),
-        data,
-        origem: inicial?.origem ?? "manual",
-        participantes: participantesFinais,
-      };
+    // No solo a despesa fica atribuída ao próprio (participante = eu), mesmo
+    // sem o seletor "Dividir por" visível.
+    const participantesFinais = solo
+      ? membroAtualId != null
+        ? [membroAtualId]
+        : membros.map((m) => m.id)
+      : participantes;
+
+    const payload = {
+      valor_centimos: centimos,
+      descricao: descricao.trim(),
+      categoria_id: categoriaId === "" ? null : Number(categoriaId),
+      membro_id: membroId === "" ? null : Number(membroId),
+      data,
+      origem: inicial?.origem ?? "manual",
+      participantes: participantesFinais,
+      talao_id: inicial?.talaoId ?? null,
+      cliente_id: gerarClienteId(),
+    };
+
+    try {
       if (editar) await api.editarDespesa(inicial!.id!, payload);
       else await api.criarDespesa(payload);
       onGuardado();
     } catch (e: any) {
-      setErro(e?.message || "Não foi possível guardar.");
+      // Sem rede ao CRIAR → guarda na fila local e fecha (sincroniza depois).
+      if (!editar && semRede(e)) {
+        const fam = getFamilia();
+        if (fam) {
+          try {
+            await enfileirar(payload, fam.codigo);
+            onGuardado();
+            return;
+          } catch {
+            setErro("Não foi possível guardar offline neste dispositivo.");
+          }
+        } else {
+          setErro("Sem grupo ativo.");
+        }
+      } else {
+        setErro(e?.message || "Não foi possível guardar.");
+      }
     } finally {
       setAGuardar(false);
     }

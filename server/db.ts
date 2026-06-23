@@ -211,6 +211,14 @@ export async function migrate() {
 
     ALTER TABLE despesas ADD COLUMN IF NOT EXISTS despesa_fixa_id INTEGER REFERENCES despesas_fixas(id) ON DELETE SET NULL;
 
+    -- Chave única do talão (ATCUD/nº doc do QR fiscal), para detetar duplicados.
+    -- NULL em despesas manuais/sem QR. Índice NÃO único (avisamos, não bloqueamos).
+    ALTER TABLE despesas ADD COLUMN IF NOT EXISTS talao_id TEXT;
+
+    -- Id gerado no cliente (idempotência da captura offline). Único por grupo
+    -- quando presente; NULL nas despesas antigas/sem captura offline.
+    ALTER TABLE despesas ADD COLUMN IF NOT EXISTS cliente_id TEXT;
+
     -- Registo de que mês de cada fixa já foi gerado (evita duplicar)
     CREATE TABLE IF NOT EXISTS geracoes_fixas (
       despesa_fixa_id INTEGER NOT NULL REFERENCES despesas_fixas(id) ON DELETE CASCADE,
@@ -219,6 +227,8 @@ export async function migrate() {
       PRIMARY KEY (despesa_fixa_id, mes)
     );
     CREATE INDEX IF NOT EXISTS idx_fixas_familia ON despesas_fixas(familia_id);
+    CREATE INDEX IF NOT EXISTS idx_despesas_talao ON despesas(familia_id, talao_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_despesas_cliente ON despesas(familia_id, cliente_id) WHERE cliente_id IS NOT NULL;
 
     CREATE INDEX IF NOT EXISTS idx_despesas_familia   ON despesas(familia_id, data);
     CREATE INDEX IF NOT EXISTS idx_despesas_categoria ON despesas(categoria_id);

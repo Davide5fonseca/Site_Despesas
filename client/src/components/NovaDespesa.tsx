@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { Categoria, Membro, TalaoExtraido } from "../api/client";
-import { hojeISO } from "../lib/format";
+import { api, Categoria, Despesa, Membro, TalaoExtraido } from "../api/client";
+import { formatarEuros, formatarNumero, hojeISO } from "../lib/format";
 import Modal from "./Modal";
 import ScanTalao from "./ScanTalao";
 import FormDespesa, { DadosIniciais } from "./FormDespesa";
@@ -15,7 +15,12 @@ interface Props {
   variante?: "destaque" | "compacto" | "cartoes";
 }
 
-type Vista = "fechado" | "scan" | "form";
+type Vista = "fechado" | "scan" | "form" | "duplicado";
+
+function dataCurta(iso: string): string {
+  const [a, m, d] = iso.split("-");
+  return `${d}/${m}/${a}`;
+}
 
 export default function NovaDespesa({ categorias, membros, onGuardado, variante = "destaque" }: Props) {
   const [vista, setVista] = useState<Vista>("fechado");
@@ -23,14 +28,29 @@ export default function NovaDespesa({ categorias, membros, onGuardado, variante 
   const [talao, setTalao] = useState<
     { confianca: "alta" | "media" | "baixa"; camposEmFalta: string[] } | undefined
   >();
+  const [duplicado, setDuplicado] = useState<Despesa | null>(null);
 
   function abrirManual() {
     setInicial({ data: hojeISO(), origem: "manual" });
     setTalao(undefined);
+    setDuplicado(null);
     setVista("form");
   }
 
-  function aoExtrair(dados: TalaoExtraido) {
+  function iniciaisDoExistente(d: Despesa): DadosIniciais {
+    return {
+      id: d.id,
+      valorTexto: formatarNumero(d.valor_centimos),
+      descricao: d.descricao,
+      categoria_id: d.categoria_id,
+      membro_id: d.membro_id,
+      data: d.data,
+      origem: d.origem,
+      participantes: d.participantes,
+    };
+  }
+
+  async function aoExtrair(dados: TalaoExtraido) {
     // Faz corresponder a categoria sugerida (por nome) a uma existente.
     const cat = categorias.find(
       (c) => c.nome.toLowerCase() === dados.categoria_sugerida.toLowerCase()
@@ -47,8 +67,24 @@ export default function NovaDespesa({ categorias, membros, onGuardado, variante 
       membro_id: null,
       data: dados.data ?? hojeISO(),
       origem: "talao",
+      talaoId: dados.talaoId ?? null,
     });
     setTalao({ confianca: dados.confianca, camposEmFalta });
+
+    // Deteção de duplicados: se o talão tem chave única, vê se já existe no grupo.
+    if (dados.talaoId) {
+      try {
+        const existentes = await api.verificarTalao(dados.talaoId);
+        if (existentes.length > 0) {
+          setDuplicado(existentes[0]);
+          setVista("duplicado");
+          return;
+        }
+      } catch {
+        /* sem rede ou falha → não bloqueia, segue para o formulário */
+      }
+    }
+    setDuplicado(null);
     setVista("form");
   }
 
@@ -56,11 +92,27 @@ export default function NovaDespesa({ categorias, membros, onGuardado, variante 
     setVista("fechado");
     setInicial(undefined);
     setTalao(undefined);
+    setDuplicado(null);
   }
 
   function guardado() {
     fechar();
     onGuardado();
+  }
+
+  // "Registar à mesma": mantém os dados scaneados e abre o formulário.
+  function registarAMesma() {
+    setDuplicado(null);
+    setVista("form");
+  }
+
+  // "Ver o existente": abre a despesa já registada em modo de edição.
+  function verExistente() {
+    if (!duplicado) return;
+    setInicial(iniciaisDoExistente(duplicado));
+    setTalao(undefined);
+    setDuplicado(null);
+    setVista("form");
   }
 
   return (
@@ -117,12 +169,51 @@ export default function NovaDespesa({ categorias, membros, onGuardado, variante 
       )}
 
       <Modal titulo="Fotografar talão" aberto={vista === "scan"} onFechar={fechar}>
-        <ScanTalao categorias={categorias} onExtraido={aoExtrair} onFechar={fechar} />
+        <ScanTalao
+          categorias={categorias}
+          onExtraido={aoExtrair}
+          onManual={abrirManual}
+          onFechar={fechar}
+        />
         <div className="mt-3 text-center">
           <button className="text-sm text-slate-400 underline" onClick={abrirManual}>
             Prefiro introduzir manualmente
           </button>
         </div>
+      </Modal>
+
+      {/* Aviso de talão já registado (não bloqueia) */}
+      <Modal titulo="Talão já registado" aberto={vista === "duplicado"} onFechar={fechar}>
+        {duplicado && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-300">
+              Já registaste este talão em{" "}
+              <span className="font-semibold text-slate-100">{dataCurta(duplicado.data)}</span>.
+            </p>
+            <div className="rounded-2xl bg-noite-900/50 px-4 py-3">
+              <div className="flex items-center justify-between">
+                <span className="truncate font-semibold text-slate-100">
+                  {duplicado.descricao || duplicado.categoria_nome || "Despesa"}
+                </span>
+                <span className="shrink-0 font-bold tabular-nums text-slate-100">
+                  {formatarEuros(duplicado.valor_centimos)}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-slate-400">
+                {[duplicado.categoria_nome, duplicado.membro_nome].filter(Boolean).join(" · ") ||
+                  "Sem categoria"}
+              </p>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button className="botao-secundario flex-1" onClick={verExistente}>
+                Ver o existente
+              </button>
+              <button className="botao-primario flex-1" onClick={registarAMesma}>
+                Registar à mesma
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Modal titulo="Nova despesa" aberto={vista === "form"} onFechar={fechar}>

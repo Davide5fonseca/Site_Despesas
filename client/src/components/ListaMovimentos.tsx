@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, Categoria, Despesa, Membro } from "../api/client";
 import { formatarEuros, formatarNumero } from "../lib/format";
 import { reconhecerLoja } from "../lib/lojas";
+import { useSync } from "../lib/sync";
 import LogoLoja from "./LogoLoja";
 import Modal from "./Modal";
 import FormDespesa, { DadosIniciais } from "./FormDespesa";
@@ -24,6 +25,13 @@ function rotuloData(iso: string): string {
 export default function ListaMovimentos({ despesas, categorias, membros, onAlterado }: Props) {
   const [aEditar, setAEditar] = useState<Despesa | null>(null);
   const [aApagar, setAApagar] = useState<number | null>(null);
+  const { avisosDup, descartarAviso } = useSync();
+
+  // Abrir uma despesa para editar conta como "revisto" e limpa o aviso de duplicado.
+  function abrir(d: Despesa) {
+    setAEditar(d);
+    if (avisosDup.includes(d.id)) descartarAviso(d.id);
+  }
 
   if (!despesas.length) {
     return (
@@ -91,6 +99,7 @@ export default function ListaMovimentos({ despesas, categorias, membros, onAlter
             <ul className="cartao overflow-hidden">
               {g.items.map((d, i) => {
                 const loja = reconhecerLoja(d.descricao);
+                const aviso = avisosDup.includes(d.id);
                 return (
                 <li
                   key={d.id}
@@ -98,7 +107,7 @@ export default function ListaMovimentos({ despesas, categorias, membros, onAlter
                     i > 0 ? "border-t border-linha/[0.06]" : ""
                   }`}
                 >
-                  <button onClick={() => setAEditar(d)} className="flex flex-1 items-center gap-3 text-left">
+                  <button onClick={() => abrir(d)} className="flex flex-1 items-center gap-3 text-left">
                     {loja ? (
                       <LogoLoja loja={loja} tamanho={44} />
                     ) : (
@@ -131,6 +140,14 @@ export default function ListaMovimentos({ despesas, categorias, membros, onAlter
                             className="shrink-0 rounded-md bg-slate-500/15 px-1.5 py-0.5 text-[10px] font-bold text-slate-400"
                           >
                             FIXA
+                          </span>
+                        )}
+                        {aviso && (
+                          <span
+                            title="Possível talão repetido — toca para rever"
+                            className="shrink-0 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-300"
+                          >
+                            TALÃO REPETIDO?
                           </span>
                         )}
                       </div>

@@ -73,6 +73,12 @@ CREATE TABLE IF NOT EXISTS despesas_fixas (
 );
 ALTER TABLE despesas ADD COLUMN IF NOT EXISTS despesa_fixa_id INTEGER REFERENCES despesas_fixas(id) ON DELETE SET NULL;
 
+-- Chave única do talão (ATCUD/nº doc do QR fiscal), para detetar duplicados.
+ALTER TABLE despesas ADD COLUMN IF NOT EXISTS talao_id TEXT;
+
+-- Id gerado no cliente (idempotência da captura offline).
+ALTER TABLE despesas ADD COLUMN IF NOT EXISTS cliente_id TEXT;
+
 -- Registo de que mês de cada fixa já foi gerado (evita duplicar)
 CREATE TABLE IF NOT EXISTS geracoes_fixas (
   despesa_fixa_id INTEGER NOT NULL REFERENCES despesas_fixas(id) ON DELETE CASCADE,
@@ -89,6 +95,8 @@ CREATE INDEX IF NOT EXISTS idx_membros_familia     ON membros(familia_id);
 CREATE INDEX IF NOT EXISTS idx_categorias_familia  ON categorias(familia_id);
 CREATE INDEX IF NOT EXISTS idx_despmembros_despesa ON despesa_membros(despesa_id);
 CREATE INDEX IF NOT EXISTS idx_despmembros_membro  ON despesa_membros(membro_id);
+CREATE INDEX IF NOT EXISTS idx_despesas_talao       ON despesas(familia_id, talao_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_despesas_cliente ON despesas(familia_id, cliente_id) WHERE cliente_id IS NOT NULL;
 
 -- Pronto! As categorias predefinidas (Supermercado, Renda, etc.) são criadas
 -- automaticamente pela app sempre que crias uma família nova — não é preciso

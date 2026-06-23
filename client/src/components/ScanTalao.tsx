@@ -8,12 +8,13 @@ import { enriquecerLoja } from "../lib/lojas";
 interface Props {
   categorias: Categoria[];
   onExtraido: (dados: TalaoExtraido, previewUrl: string) => void;
+  onManual: () => void; // fallback: introduzir manualmente
   onFechar: () => void;
 }
 
 type Estado = "espera" | "a_comprimir" | "a_ler" | "erro";
 
-export default function ScanTalao({ categorias, onExtraido, onFechar }: Props) {
+export default function ScanTalao({ categorias, onExtraido, onManual, onFechar }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [estado, setEstado] = useState<Estado>("espera");
   const [erro, setErro] = useState<string | null>(null);
@@ -45,7 +46,7 @@ export default function ScanTalao({ categorias, onExtraido, onFechar }: Props) {
       setEstado("a_ler");
       const nomes = categorias.map((c) => c.nome);
 
-      // 1) QR fiscal (rápido e exato p/ valor e data). Não falha o fluxo se não houver.
+      // 1) QR fiscal (rápido e exato p/ valor, data e chave única). Não falha o fluxo se não houver.
       const qr = await lerQRTalao(comprimida).catch(() => null);
       // 2) OCR/IA para a loja e a categoria (e fallback de valor/data).
       const base = usarIA
@@ -53,13 +54,22 @@ export default function ScanTalao({ categorias, onExtraido, onFechar }: Props) {
         : await lerTalaoLocal(comprimida, nomes, (p) => setProgresso(p));
 
       const dados = enriquecerLoja(qr ? mesclarQR(base, qr) : base);
+
+      // Se não conseguimos extrair nada de útil (sem QR e OCR vazio), trata como
+      // "ilegível": leva para a introdução manual em vez de gravar um talão vazio.
+      if (dados.valor === null && !dados.loja && !dados.data) {
+        setEstado("erro");
+        setErro(
+          "Não consegui ler este talão (pode estar sem QR fiscal ou desbotado). Preenche os dados à mão."
+        );
+        return;
+      }
+
       onExtraido(dados, url);
     } catch (err: any) {
+      // Qualquer falha na leitura → fallback limpo para manual, sem ecrã de erro técnico.
       setEstado("erro");
-      setErro(
-        err?.message ||
-          "Não foi possível ler o talão. Tenta outra foto ou introduz manualmente."
-      );
+      setErro("Não consegui ler este talão. Podes introduzir os dados manualmente.");
     } finally {
       if (inputRef.current) inputRef.current.value = "";
     }
@@ -121,18 +131,36 @@ export default function ScanTalao({ categorias, onExtraido, onFechar }: Props) {
         </div>
       )}
 
-      {erro && (
-        <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-          {erro}
-        </p>
+      {/* Erro / talão ilegível → fallback claro para introdução manual */}
+      {estado === "erro" && (
+        <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <p className="text-sm text-amber-200">{erro}</p>
+          <button className="botao-primario w-full" onClick={onManual}>
+            Introduzir manualmente
+          </button>
+          <button
+            className="w-full text-center text-sm text-slate-400 underline"
+            onClick={() => {
+              setEstado("espera");
+              setErro(null);
+              setPreview(null);
+            }}
+          >
+            Tentar outra foto
+          </button>
+        </div>
       )}
 
-      <p className="text-center text-xs text-slate-500">
-        Lê o QR fiscal do talão (valor e data exatos) e {usarIA === false ? "o resto no teu telemóvel (grátis)" : "a IA preenche a loja e a categoria"}. Confirmas tudo antes de gravar.
-        {usarIA === false && " Na 1.ª vez descarrega o idioma (precisa de internet uma vez)."}
-        <br />
-        Nota: no iPhone, a câmara exige HTTPS.
-      </p>
+      {estado !== "erro" && (
+        <p className="text-center text-xs text-slate-500">
+          Lê o QR fiscal do talão (valor e data exatos) e{" "}
+          {usarIA === false ? "o resto no teu telemóvel (grátis)" : "a IA preenche a loja e a categoria"}.
+          Confirmas tudo antes de gravar.
+          {usarIA === false && " Na 1.ª vez descarrega o idioma (precisa de internet uma vez)."}
+          <br />
+          Nota: no iPhone, a câmara exige HTTPS.
+        </p>
+      )}
 
       <button className="botao-secundario w-full" onClick={onFechar} disabled={aProcessar}>
         Cancelar

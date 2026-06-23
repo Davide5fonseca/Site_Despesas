@@ -4,10 +4,13 @@ import type { TalaoExtraido } from "../api/client";
 // talões/faturas PT desde 2022 têm um QR com os dados estruturados — muito mais
 // fiável que OCR. Formato: pares "K:valor" separados por "*". Campos úteis:
 //   A = NIF do emitente (loja)   F = data (AAAAMMDD)   O = total com impostos
+//   G = identificação única do documento   H = ATCUD (código único do documento)
 export interface TalaoQR {
   valor: number | null; // euros
   data: string | null; // YYYY-MM-DD
   nif: string | null; // NIF do emitente
+  atcud: string | null; // campo H — código único do documento
+  docId: string | null; // campo G — nº/identificação do documento
 }
 
 // Lê o QR de uma imagem. Devolve null se não houver QR fiscal reconhecível.
@@ -17,14 +20,24 @@ export async function lerQRTalao(imagem: Blob): Promise<TalaoQR | null> {
   return parseQRFiscal(texto);
 }
 
+// Chave única de um talão para deteção de duplicados: ATCUD (preferido) ou,
+// em falta, a identificação do documento. null se nenhum existir.
+export function talaoIdDoQR(qr: TalaoQR | null): string | null {
+  if (!qr) return null;
+  if (qr.atcud) return qr.atcud;
+  if (qr.docId && qr.nif) return `${qr.nif}:${qr.docId}`;
+  return null;
+}
+
 // Junta o que veio do QR (exato) com o que veio do OCR/IA (loja, categoria).
-// O QR manda no valor e na data; o OCR continua a dar a loja e a categoria.
+// O QR manda no valor, na data e na chave única; o OCR dá a loja e a categoria.
 export function mesclarQR(base: TalaoExtraido, qr: TalaoQR): TalaoExtraido {
   return {
     ...base,
     valor: qr.valor ?? base.valor,
     data: qr.data ?? base.data,
     nif: qr.nif ?? base.nif ?? null,
+    talaoId: talaoIdDoQR(qr) ?? base.talaoId ?? null,
     confianca: qr.valor !== null ? "alta" : base.confianca,
   };
 }
@@ -106,7 +119,13 @@ export function parseQRFiscal(texto: string): TalaoQR | null {
   const data = campos.F ? dataAT(campos.F) : null;
   if (valor === null && data === null) return null; // nada de útil
 
-  return { valor, data, nif: campos.A };
+  return {
+    valor,
+    data,
+    nif: campos.A,
+    atcud: campos.H || null,
+    docId: campos.G || null,
+  };
 }
 
 // O total no QR fiscal vem com ponto decimal: "23.45".
