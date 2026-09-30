@@ -5,7 +5,7 @@ import rateLimit from "express-rate-limit";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { migrate, obterFamiliaComPin, sessaoValida, ah } from "./db.js";
+import { migrate, obterFamiliaComPin, sessaoValida, ah, erroDeLigacao, bdDisponivel } from "./db.js";
 import { despesasRouter } from "./routes/despesas.js";
 import { categoriasRouter } from "./routes/categorias.js";
 import { membrosRouter } from "./routes/membros.js";
@@ -57,8 +57,14 @@ const limiteTalaoGrupo = rateLimit({
 const se = (mw: express.RequestHandler) => (TESTE ? [] : [mw]);
 if (!TESTE) app.use("/api", limiteGlobal);
 
-app.get("/api/saude", (_req, res) =>
-  res.json({ ok: true, ia: Boolean(process.env.ANTHROPIC_API_KEY) })
+// `ok` = o processo está vivo (health check do Render); `bd` = a base de dados
+// responde. Sem BD a app não funciona — é a 1.ª coisa a ver quando algo falha.
+app.get(
+  "/api/saude",
+  ah(async (_req, res) => {
+    const bd = await bdDisponivel();
+    res.json({ ok: true, bd, ia: Boolean(process.env.ANTHROPIC_API_KEY) });
+  })
 );
 
 // Criar/entrar numa família NÃO exige família prévia (mas é fortemente limitado).
@@ -114,6 +120,15 @@ app.use(
   (err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     if (err?.type === "entity.too.large") return res.status(413).json({ erro: "Pedido grande demais." });
     if (err?.type === "entity.parse.failed") return res.status(400).json({ erro: "JSON inválido." });
+    if (erroDeLigacao(err)) {
+      console.error("Base de dados indisponível:", err?.message || err);
+      return res.status(503).json({
+        erro:
+          "A base de dados está indisponível. Se usas o Supabase gratuito, o projeto pode ter sido " +
+          "pausado por inatividade — reativa-o no painel do Supabase e tenta de novo.",
+        bd: false,
+      });
+    }
     console.error(err);
     res.status(500).json({ erro: "Erro interno do servidor" });
   }

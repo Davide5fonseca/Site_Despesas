@@ -59,6 +59,34 @@ export const ah =
 
 export const ERRO_UNICO = "23505"; // código Postgres de violação UNIQUE
 
+// A base de dados está inacessível? (projeto Supabase pausado, DNS, rede,
+// pooler cheio…) — distinto de um erro de SQL nosso.
+export function erroDeLigacao(e: any): boolean {
+  const codigo = String(e?.code ?? "");
+  if (["ENOTFOUND", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "57P01", "53300", "08006", "08001"].includes(codigo)) {
+    return true;
+  }
+  const msg = String(e?.message ?? "").toLowerCase();
+  return (
+    /tenant|not found|timeout exceeded when trying to connect|connection terminated|too many connections/.test(msg) &&
+    (codigo === "XX000" || codigo === "" || e?.severity === "FATAL")
+  );
+}
+
+// Verifica a ligação (para /api/saude), com limite de tempo curto e sem
+// lançar: devolve true/false.
+export async function bdDisponivel(ms = 3000): Promise<boolean> {
+  try {
+    await Promise.race([
+      pool.query("SELECT 1"),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ── Categorias predefinidas (criadas por família) ──────────────────────────
 const CATEGORIAS_INICIAIS: Array<{ nome: string; cor: string }> = [
   { nome: "Supermercado", cor: "#16a34a" },
