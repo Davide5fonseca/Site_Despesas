@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { q, ah } from "../db.js";
-import { materializarFixas, mesAtual } from "../lib/fixas.js";
+import { materializarFixas } from "../lib/fixas.js";
+import { mesAtual, RE_MES } from "../lib/tempo.js";
 
 export const saldosRouter = Router();
 
@@ -10,7 +11,7 @@ saldosRouter.get(
   ah(async (req, res) => {
     const familiaId = (req as any).familiaId as number;
     const mes = req.query.mes as string | undefined;
-    const filtraMes = !!(mes && /^\d{4}-\d{2}$/.test(mes));
+    const filtraMes = !!(mes && RE_MES.test(mes));
     // Garante as fixas geradas (do mês pedido, ou do mês atual no modo "tudo").
     await materializarFixas(familiaId, filtraMes ? (mes as string) : mesAtual());
 

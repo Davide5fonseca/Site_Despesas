@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { q, um, ah, ERRO_UNICO } from "../db.js";
+import { q, um, ah, tx, ERRO_UNICO } from "../db.js";
 
 export const membrosRouter = Router();
 
@@ -73,10 +73,16 @@ membrosRouter.delete(
   ah(async (req, res) => {
     const familiaId = (req as any).familiaId as number;
     const id = Number(req.params.id);
-    const apagado = await um(
-      "DELETE FROM membros WHERE id = $1 AND familia_id = $2 RETURNING id",
-      [id, familiaId]
-    );
+    const apagado = await tx(async (c) => {
+      // As fixas guardam os participantes num array sem FK: limpa-o aqui, senão
+      // a próxima geração mensal tentava inserir um membro inexistente e falhava.
+      await c.query(
+        "UPDATE despesas_fixas SET participantes = array_remove(participantes, $1) WHERE familia_id = $2",
+        [id, familiaId]
+      );
+      const r = await c.query("DELETE FROM membros WHERE id = $1 AND familia_id = $2 RETURNING id", [id, familiaId]);
+      return r.rows[0];
+    });
     if (!apagado) return res.status(404).json({ erro: "Não encontrado" });
     res.status(204).end();
   })

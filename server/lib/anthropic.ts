@@ -1,10 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { z } from "zod/v4"; // o helper zodOutputFormat do SDK exige Zod v4
 
-// O modelo com visão. Sonnet 4.6 é o Sonnet mais recente: tem visão, é rápido e
-// bem mais barato que o Opus para OCR de talões. Configurável por ambiente.
-const MODELO = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+// Modelo com visão. Sonnet 5.5 é o Sonnet atual: rápido, com visão e o mais
+// barato da família Sonnet ($2/$10 por MTok). Configurável por ambiente.
+const MODELO = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
 
 // A chave vive SÓ no servidor (.env). Nunca exposta ao frontend.
+let cliente: Anthropic | null = null;
 function obterCliente(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -12,7 +15,9 @@ function obterCliente(): Anthropic {
       codigo: "SEM_CHAVE",
     });
   }
-  return new Anthropic({ apiKey });
+  // Reutiliza o cliente (mantém ligações HTTP abertas entre pedidos).
+  cliente ??= new Anthropic({ apiKey, timeout: 45_000, maxRetries: 1 });
+  return cliente;
 }
 
 export interface TalaoExtraido {
@@ -23,39 +28,39 @@ export interface TalaoExtraido {
   confianca: "alta" | "media" | "baixa";
 }
 
-// Remove cercas de código (``` ou ```json) e devolve o JSON encontrado.
-function extrairJson(texto: string): string {
-  let t = texto.trim();
-  // Remove blocos ```json ... ``` ou ``` ... ```
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) t = fence[1].trim();
-  // Caso venha texto à volta, isola o primeiro objeto { ... }
-  const inicio = t.indexOf("{");
-  const fim = t.lastIndexOf("}");
-  if (inicio !== -1 && fim !== -1 && fim > inicio) {
-    t = t.slice(inicio, fim + 1);
-  }
-  return t;
-}
+// Esquema da resposta — a API garante JSON válido com exatamente esta forma
+// (structured outputs), por isso não há parsing de texto nem cercas de código.
+const TalaoSchema = z.object({
+  valor: z.number().nullable().describe("TOTAL pago em euros (ex.: 12.5). null se ilegível."),
+  loja: z.string().nullable().describe("Nome do estabelecimento. null se ilegível."),
+  data: z.string().nullable().describe("Data da compra em YYYY-MM-DD. null se ilegível."),
+  categoria_sugerida: z.string().describe("Uma das categorias fornecidas, exatamente como escrita."),
+  confianca: z.enum(["alta", "media", "baixa"]),
+});
 
-function normalizarConfianca(v: unknown): "alta" | "media" | "baixa" {
-  return v === "alta" || v === "media" || v === "baixa" ? v : "baixa";
-}
+const ILEGIVEL: TalaoExtraido = {
+  valor: null,
+  loja: null,
+  data: null,
+  categoria_sugerida: "Outros",
+  confianca: "baixa",
+};
 
 // Garante 'YYYY-MM-DD' válido; caso contrário null.
-function normalizarData(v: unknown): string | null {
-  if (typeof v !== "string") return null;
-  return /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? v.trim() : null;
+function normalizarData(v: string | null): string | null {
+  if (!v) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v.trim());
+  if (!m) return null;
+  const [, a, mes, d] = m.map(Number);
+  if (mes < 1 || mes > 12 || d < 1 || d > 31) return null;
+  return v.trim();
 }
 
-function normalizarValor(v: unknown): number | null {
-  if (typeof v === "number" && Number.isFinite(v) && v >= 0) return v;
-  if (typeof v === "string") {
-    const n = Number(v.replace(",", ".").replace(/[^\d.]/g, ""));
-    if (Number.isFinite(n) && n >= 0) return n;
-  }
-  return null;
-}
+const SISTEMA =
+  "És um extrator de dados de talões/faturas de compras portugueses. " +
+  "Lês a imagem e devolves os campos pedidos. Regras: usa o TOTAL final do talão " +
+  "(não subtotais nem IVA isolado); converte datas PT (DD/MM/AAAA, DD-MM-AAAA) para YYYY-MM-DD; " +
+  "se a imagem não for um talão ou estiver ilegível, devolve valor/loja/data a null e confianca 'baixa'.";
 
 /**
  * Lê um talão a partir de uma imagem (base64) e devolve dados estruturados.
@@ -68,82 +73,46 @@ export async function lerTalao(
 ): Promise<TalaoExtraido> {
   const cliente = obterCliente();
 
-  const tiposAceites = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-  const tipo = tiposAceites.includes(mediaType) ? mediaType : "image/jpeg";
+  const tiposAceites = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+  const tipo = (tiposAceites as readonly string[]).includes(mediaType)
+    ? (mediaType as (typeof tiposAceites)[number])
+    : "image/jpeg";
 
   const listaCategorias = categorias.length ? categorias.join(", ") : "Outros";
 
-  const sistema =
-    "És um extrator de dados de talões/faturas de compras portugueses. " +
-    "Respondes SEMPRE e APENAS com um objeto JSON válido, sem texto à volta, " +
-    "sem explicações e sem cercas de código.";
-
-  const instrucao = `Analisa a imagem deste talão/fatura e extrai os dados.
-
-Devolve EXATAMENTE este formato JSON (e nada mais):
-{
-  "valor": number | null,          // TOTAL pago em euros, com ponto decimal (ex.: 12.50). null se ilegível.
-  "loja": string | null,           // nome do estabelecimento/loja. null se ilegível.
-  "data": "YYYY-MM-DD" | null,      // data da compra. null se ilegível.
-  "categoria_sugerida": string,    // UMA destas categorias existentes: ${listaCategorias}
-  "confianca": "alta" | "media" | "baixa"
-}
-
-Regras:
-- Usa o TOTAL final do talão (não subtotais nem IVA isolado).
-- A "categoria_sugerida" TEM de ser uma das categorias listadas acima.
-- Se a imagem não for um talão ou estiver ilegível, devolve valor/loja/data a null e "confianca": "baixa".
-- Datas em formatos PT (DD/MM/AAAA, DD-MM-AAAA) devem ser convertidas para YYYY-MM-DD.`;
-
-  const resposta = await cliente.messages.create({
+  const resposta = await cliente.messages.parse({
     model: MODELO,
     max_tokens: 1024,
-    system: [{ type: "text", text: sistema, cache_control: { type: "ephemeral" } }],
+    // O prompt de sistema é fixo -> cacheável; o que varia (imagem, categorias) vem depois.
+    system: [{ type: "text", text: SISTEMA, cache_control: { type: "ephemeral" } }],
+    output_config: { format: zodOutputFormat(TalaoSchema), effort: "low" },
     messages: [
       {
         role: "user",
         content: [
+          { type: "image", source: { type: "base64", media_type: tipo, data: imagemBase64 } },
           {
-            type: "image",
-            source: { type: "base64", media_type: tipo as any, data: imagemBase64 },
+            type: "text",
+            text: `Extrai os dados deste talão. A categoria_sugerida TEM de ser uma destas: ${listaCategorias}.`,
           },
-          { type: "text", text: instrucao },
         ],
       },
     ],
   });
 
-  const texto = resposta.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-
-  // Parsing seguro: remove fences, isola o objeto e valida campos.
-  let bruto: any;
-  try {
-    bruto = JSON.parse(extrairJson(texto));
-  } catch {
-    // Modelo não devolveu JSON utilizável -> trata como ilegível.
-    return {
-      valor: null,
-      loja: null,
-      data: null,
-      categoria_sugerida: "Outros",
-      confianca: "baixa",
-    };
-  }
+  if (resposta.stop_reason === "refusal" || !resposta.parsed_output) return ILEGIVEL;
+  const bruto = resposta.parsed_output;
 
   // Garante que a categoria sugerida existe na lista (senão "Outros").
-  let categoria = typeof bruto.categoria_sugerida === "string" ? bruto.categoria_sugerida : "Outros";
-  if (!categorias.some((c) => c.toLowerCase() === String(categoria).toLowerCase())) {
-    categoria = categorias.includes("Outros") ? "Outros" : categorias[0] || "Outros";
-  }
+  const categoria =
+    categorias.find((c) => c.toLowerCase() === bruto.categoria_sugerida.toLowerCase()) ??
+    (categorias.includes("Outros") ? "Outros" : categorias[0] || "Outros");
 
   return {
-    valor: normalizarValor(bruto.valor),
-    loja: typeof bruto.loja === "string" && bruto.loja.trim() ? bruto.loja.trim() : null,
+    valor: bruto.valor !== null && Number.isFinite(bruto.valor) && bruto.valor >= 0 ? bruto.valor : null,
+    loja: bruto.loja?.trim() || null,
     data: normalizarData(bruto.data),
     categoria_sugerida: categoria,
-    confianca: normalizarConfianca(bruto.confianca),
+    confianca: bruto.confianca,
   };
 }

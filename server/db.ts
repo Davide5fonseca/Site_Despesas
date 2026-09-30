@@ -1,5 +1,8 @@
 import pg from "pg";
-import { randomInt } from "node:crypto";
+import { randomInt, randomBytes, createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 
 const { Pool } = pg;
@@ -150,95 +153,34 @@ export async function contarMembros(familiaId: number): Promise<number> {
   return r ? Number(r.n) : 0;
 }
 
-// ── Migração (cria tabelas se não existirem) ───────────────────────────────
+// ── Sessões (grupos com PIN) ────────────────────────────────────────────────
+// Quem entra com código + PIN recebe um token aleatório; guardamos só o hash.
+// Nos grupos com PIN, as rotas de dados exigem este token (o código sozinho
+// não chega — é o que se partilha para convidar).
+const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
+
+export async function criarSessao(familiaId: number, c?: pg.PoolClient): Promise<string> {
+  const token = randomBytes(32).toString("base64url");
+  await (c ?? pool).query("INSERT INTO sessoes (token_hash, familia_id) VALUES ($1, $2)", [
+    hashToken(token),
+    familiaId,
+  ]);
+  return token;
+}
+
+export async function sessaoValida(familiaId: number, token: string | undefined): Promise<boolean> {
+  if (!token) return false;
+  const r = await um("SELECT 1 FROM sessoes WHERE token_hash = $1 AND familia_id = $2", [
+    hashToken(token),
+    familiaId,
+  ]);
+  return Boolean(r);
+}
+
+// ── Migração ───────────────────────────────────────────────────────────────
+// O schema.sql é a fonte única do esquema (idempotente); aplica-o tal como está.
+const SCHEMA = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "schema.sql"), "utf8");
+
 export async function migrate() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS familias (
-      id        SERIAL PRIMARY KEY,
-      codigo    TEXT NOT NULL UNIQUE,
-      nome      TEXT NOT NULL DEFAULT 'A nossa casa',
-      pin_hash  TEXT,
-      criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-    ALTER TABLE familias ADD COLUMN IF NOT EXISTS pin_hash TEXT;
-
-    CREATE TABLE IF NOT EXISTS membros (
-      id         SERIAL PRIMARY KEY,
-      familia_id INTEGER NOT NULL REFERENCES familias(id) ON DELETE CASCADE,
-      nome       TEXT NOT NULL,
-      UNIQUE (familia_id, nome)
-    );
-
-    CREATE TABLE IF NOT EXISTS categorias (
-      id         SERIAL PRIMARY KEY,
-      familia_id INTEGER NOT NULL REFERENCES familias(id) ON DELETE CASCADE,
-      nome       TEXT NOT NULL,
-      cor        TEXT NOT NULL DEFAULT '#64748b',
-      UNIQUE (familia_id, nome)
-    );
-
-    CREATE TABLE IF NOT EXISTS despesas (
-      id             SERIAL PRIMARY KEY,
-      familia_id     INTEGER NOT NULL REFERENCES familias(id) ON DELETE CASCADE,
-      valor_centimos INTEGER NOT NULL CHECK (valor_centimos >= 0),
-      descricao      TEXT NOT NULL DEFAULT '',
-      categoria_id   INTEGER REFERENCES categorias(id) ON DELETE SET NULL,
-      membro_id      INTEGER REFERENCES membros(id)    ON DELETE SET NULL,
-      data           TEXT NOT NULL,
-      origem         TEXT NOT NULL DEFAULT 'manual',
-      criado_em      TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-
-    CREATE TABLE IF NOT EXISTS despesa_membros (
-      despesa_id INTEGER NOT NULL REFERENCES despesas(id) ON DELETE CASCADE,
-      membro_id  INTEGER NOT NULL REFERENCES membros(id)  ON DELETE CASCADE,
-      PRIMARY KEY (despesa_id, membro_id)
-    );
-
-    -- Despesas fixas / subscrições (modelo que gera uma despesa por mês)
-    CREATE TABLE IF NOT EXISTS despesas_fixas (
-      id             SERIAL PRIMARY KEY,
-      familia_id     INTEGER NOT NULL REFERENCES familias(id) ON DELETE CASCADE,
-      valor_centimos INTEGER NOT NULL CHECK (valor_centimos >= 0),
-      descricao      TEXT NOT NULL DEFAULT '',
-      categoria_id   INTEGER REFERENCES categorias(id) ON DELETE SET NULL,
-      membro_id      INTEGER REFERENCES membros(id)    ON DELETE SET NULL,
-      dia            INTEGER NOT NULL DEFAULT 1 CHECK (dia >= 1 AND dia <= 31),
-      participantes  INTEGER[] NOT NULL DEFAULT '{}',
-      ativa          BOOLEAN NOT NULL DEFAULT true,
-      criado_em      TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-
-    ALTER TABLE despesas ADD COLUMN IF NOT EXISTS despesa_fixa_id INTEGER REFERENCES despesas_fixas(id) ON DELETE SET NULL;
-
-    -- Chave única do talão (ATCUD/nº doc do QR fiscal), para detetar duplicados.
-    -- NULL em despesas manuais/sem QR. Índice NÃO único (avisamos, não bloqueamos).
-    ALTER TABLE despesas ADD COLUMN IF NOT EXISTS talao_id TEXT;
-
-    -- Id gerado no cliente (idempotência da captura offline). Único por grupo
-    -- quando presente; NULL nas despesas antigas/sem captura offline.
-    ALTER TABLE despesas ADD COLUMN IF NOT EXISTS cliente_id TEXT;
-
-    -- IVA em cêntimos (do QR fiscal), para o relatório. NULL em manuais/sem QR.
-    ALTER TABLE despesas ADD COLUMN IF NOT EXISTS iva_centimos INTEGER;
-
-    -- Registo de que mês de cada fixa já foi gerado (evita duplicar)
-    CREATE TABLE IF NOT EXISTS geracoes_fixas (
-      despesa_fixa_id INTEGER NOT NULL REFERENCES despesas_fixas(id) ON DELETE CASCADE,
-      mes             TEXT NOT NULL,
-      despesa_id      INTEGER REFERENCES despesas(id) ON DELETE SET NULL,
-      PRIMARY KEY (despesa_fixa_id, mes)
-    );
-    CREATE INDEX IF NOT EXISTS idx_fixas_familia ON despesas_fixas(familia_id);
-    CREATE INDEX IF NOT EXISTS idx_despesas_talao ON despesas(familia_id, talao_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_despesas_cliente ON despesas(familia_id, cliente_id) WHERE cliente_id IS NOT NULL;
-
-    CREATE INDEX IF NOT EXISTS idx_despesas_familia   ON despesas(familia_id, data);
-    CREATE INDEX IF NOT EXISTS idx_despesas_categoria ON despesas(categoria_id);
-    CREATE INDEX IF NOT EXISTS idx_despesas_membro    ON despesas(membro_id);
-    CREATE INDEX IF NOT EXISTS idx_membros_familia    ON membros(familia_id);
-    CREATE INDEX IF NOT EXISTS idx_categorias_familia ON categorias(familia_id);
-    CREATE INDEX IF NOT EXISTS idx_despmembros_despesa ON despesa_membros(despesa_id);
-    CREATE INDEX IF NOT EXISTS idx_despmembros_membro  ON despesa_membros(membro_id);
-  `);
+  await pool.query(SCHEMA);
 }

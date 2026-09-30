@@ -3,6 +3,7 @@ import { z } from "zod";
 import pg from "pg";
 import { q, um, tx, ah, pool } from "../db.js";
 import { materializarFixas } from "../lib/fixas.js";
+import { RE_MES, dataValida } from "../lib/tempo.js";
 
 export const despesasRouter = Router();
 
@@ -11,7 +12,10 @@ const DespesaInput = z.object({
   descricao: z.string().trim().max(120).default(""),
   categoria_id: z.number().int().positive().nullable().optional(),
   membro_id: z.number().int().positive().nullable().optional(),
-  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve ser YYYY-MM-DD"),
+  data: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve ser YYYY-MM-DD")
+    .refine(dataValida, "Data inválida"),
   origem: z.enum(["manual", "talao", "fixa"]).default("manual"),
   participantes: z.array(z.number().int().positive()).optional().default([]),
   talao_id: z.string().trim().max(120).nullable().optional(),
@@ -78,7 +82,7 @@ despesasRouter.get(
     let i = 2;
 
     const mes = req.query.mes as string | undefined;
-    if (mes && /^\d{4}-\d{2}$/.test(mes)) {
+    if (mes && RE_MES.test(mes)) {
       await materializarFixas(familiaId, mes); // gera as fixas deste mês, se faltar
       cond.push(`d.data LIKE $${i++}`);
       params.push(`${mes}-%`);

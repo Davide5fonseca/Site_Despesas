@@ -5,7 +5,7 @@ import rateLimit from "express-rate-limit";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { migrate, obterFamiliaPorCodigo, ah } from "./db.js";
+import { migrate, obterFamiliaComPin, sessaoValida, ah } from "./db.js";
 import { despesasRouter } from "./routes/despesas.js";
 import { categoriasRouter } from "./routes/categorias.js";
 import { membrosRouter } from "./routes/membros.js";
@@ -14,6 +14,7 @@ import { saldosRouter } from "./routes/saldos.js";
 import { talaoRouter } from "./routes/talao.js";
 import { familiasRouter } from "./routes/familias.js";
 import { fixasRouter } from "./routes/fixas.js";
+import { orcamentosRouter } from "./routes/orcamentos.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTE = process.env.NODE_ENV === "test";
@@ -27,24 +28,33 @@ app.set("trust proxy", 1);
 // CORS: em produção restringe à origem do site (FRONTEND_ORIGIN); em dev fica aberto.
 const ORIGEM = process.env.FRONTEND_ORIGIN;
 app.use(cors(ORIGEM ? { origin: ORIGEM } : {}));
-app.use(express.json());
+app.use(express.json({ limit: "64kb" }));
 
-// Rate-limiting global (anti-abuso) + limitador apertado para criar/entrar família.
-const limiteGlobal = rateLimit({
-  windowMs: 5 * 60 * 1000,
-  limit: 600,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  message: { erro: "Demasiados pedidos. Aguarda um pouco." },
+// Cabeçalhos de segurança básicos (sem dependências extra).
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "same-origin");
+  next();
 });
-const limiteFamilia = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  limit: 20, // máx. 20 tentativas de criar/entrar por IP em 10 min
+
+// Rate-limiting global (anti-abuso) + limitadores apertados para as rotas caras.
+const limitador = (windowMs: number, limit: number, mensagem: string) =>
+  rateLimit({ windowMs, limit, standardHeaders: "draft-7", legacyHeaders: false, message: { erro: mensagem } });
+const limiteGlobal = limitador(5 * 60 * 1000, 600, "Demasiados pedidos. Aguarda um pouco.");
+const limiteFamilia = limitador(10 * 60 * 1000, 20, "Demasiadas tentativas. Tenta de novo daqui a uns minutos.");
+// A leitura por IA custa dinheiro: por IP, e por grupo (o cabeçalho é a chave).
+const limiteTalaoIp = limitador(60 * 60 * 1000, 60, "Muitas leituras de talão. Tenta daqui a uma hora.");
+const limiteTalaoGrupo = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  limit: Number(process.env.TALAO_LIMITE_DIA || 100),
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: { erro: "Demasiadas tentativas. Tenta de novo daqui a uns minutos." },
+  keyGenerator: (req) => `grupo:${req.header("x-familia-codigo") || "?"}`,
+  message: { erro: "Este grupo já leu muitos talões hoje. Amanhã volta a funcionar; até lá, introduz à mão." },
 });
 // Em testes os limitadores são desligados (não interferem com os cenários).
+const se = (mw: express.RequestHandler) => (TESTE ? [] : [mw]);
 if (!TESTE) app.use("/api", limiteGlobal);
 
 app.get("/api/saude", (_req, res) =>
@@ -52,14 +62,19 @@ app.get("/api/saude", (_req, res) =>
 );
 
 // Criar/entrar numa família NÃO exige família prévia (mas é fortemente limitado).
-app.use("/api/familias", ...(TESTE ? [] : [limiteFamilia]), familiasRouter);
+app.use("/api/familias", ...se(limiteFamilia), familiasRouter);
 
 // Middleware de scoping: resolve o código (cabeçalho x-familia-codigo) -> familia_id.
+// Em grupos com PIN exige também um token de sessão (obtido ao entrar com o PIN):
+// o código é o que se partilha para convidar, por isso sozinho não chega.
 const exigirFamilia = ah(async (req, res, next) => {
   const codigo = req.header("x-familia-codigo");
   if (!codigo) return res.status(401).json({ erro: "Sem família. Cria ou entra numa família." });
-  const familia = await obterFamiliaPorCodigo(codigo);
+  const familia = await obterFamiliaComPin(codigo);
   if (!familia) return res.status(401).json({ erro: "Código de família inválido." });
+  if (familia.pin_hash && !(await sessaoValida(familia.id, req.header("x-familia-token")))) {
+    return res.status(401).json({ erro: "Sessão inválida. Volta a entrar com o PIN.", pinNecessario: true });
+  }
   (req as any).familiaId = familia.id;
   next();
 });
@@ -70,14 +85,26 @@ app.use("/api/membros", exigirFamilia, membrosRouter);
 app.use("/api/resumo", exigirFamilia, resumoRouter);
 app.use("/api/saldos", exigirFamilia, saldosRouter);
 app.use("/api/fixas", exigirFamilia, fixasRouter);
-app.use("/api/talao", exigirFamilia, talaoRouter);
+app.use("/api/orcamentos", exigirFamilia, orcamentosRouter);
+app.use("/api/talao", exigirFamilia, ...se(limiteTalaoIp), ...se(limiteTalaoGrupo), talaoRouter);
+
+// Rotas /api desconhecidas -> 404 JSON (em vez de cair no index.html).
+app.all("/api/*", (_req, res) => res.status(404).json({ erro: "Rota não encontrada." }));
 
 // Servir o frontend compilado (Opção A: tudo num só serviço).
 const distDir = join(__dirname, "..", "client", "dist");
 if (existsSync(distDir)) {
-  app.use(express.static(distDir));
-  app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api")) return next();
+  // Os assets do Vite têm hash no nome -> cache longa; o index.html nunca.
+  app.use(
+    express.static(distDir, {
+      setHeaders(res, caminho) {
+        if (/[\\/]assets[\\/]/.test(caminho)) res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        else res.setHeader("Cache-Control", "no-cache");
+      },
+    })
+  );
+  app.get("*", (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
     res.sendFile(join(distDir, "index.html"));
   });
 }
@@ -85,6 +112,8 @@ if (existsSync(distDir)) {
 // Tratamento de erros não previstos
 app.use(
   (err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (err?.type === "entity.too.large") return res.status(413).json({ erro: "Pedido grande demais." });
+    if (err?.type === "entity.parse.failed") return res.status(400).json({ erro: "JSON inválido." });
     console.error(err);
     res.status(500).json({ erro: "Erro interno do servidor" });
   }
