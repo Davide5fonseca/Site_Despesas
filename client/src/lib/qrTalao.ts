@@ -140,7 +140,7 @@ function ivaDoQR(campos: Record<string, string>): number | null {
     const v = campos[k] ? paraNumero(campos[k]) : null;
     return v !== null ? acc + v : acc;
   }, 0);
-  return soma > 0 ? soma : null;
+  return soma > 0 ? Math.round(soma * 100) / 100 : null; // evita 4.199999… (vírgula flutuante)
 }
 
 // O total no QR fiscal vem com ponto decimal: "23.45".

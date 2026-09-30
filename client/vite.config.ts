@@ -45,6 +45,17 @@ export default defineConfig({
               cacheName: "api-cache",
               networkTimeoutSeconds: 5,
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
+              plugins: [
+                {
+                  // A chave da cache inclui o grupo: offline, quem troca de grupo
+                  // no mesmo dispositivo nunca vê dados do grupo anterior.
+                  cacheKeyWillBeUsed: async ({ request }) => {
+                    const u = new URL(request.url);
+                    u.searchParams.set("_g", request.headers.get("x-familia-codigo") || "");
+                    return u.href;
+                  },
+                },
+              ],
             },
           },
           {

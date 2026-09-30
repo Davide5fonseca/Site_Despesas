@@ -21,4 +21,8 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false # opcional (sem isto, a leitura de talões usa OCR no telemóvel)
       - key: ANTHROPIC_MODEL
-        value: claude-sonnet-4-6
+        value: claude-sonnet-5-5
+      - key: APP_TZ
+        value: Europe/Lisbon
+      - key: TALAO_LIMITE_DIA
+        value: "100" # leituras de talão por IA, por grupo e por dia

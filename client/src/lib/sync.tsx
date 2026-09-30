@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { DespesaInput, postDespesaSync } from "../api/client";
-import { filaAdicionar, filaListar, filaRemover, ItemFila } from "./filaSync";
+import { DespesaInput, getFamilia, postDespesaSync } from "../api/client";
+import { filaAdicionar, filaAtualizar, filaListar, filaRemover, ItemFila } from "./filaSync";
 
 interface SyncCtx {
   itens: ItemFila[]; // despesas por sincronizar (todos os grupos)
@@ -9,7 +9,7 @@ interface SyncCtx {
   online: boolean;
   sincronizadoEm: number; // timestamp da última sincronização com sucesso
   avisosDup: number[]; // ids de despesas sinalizadas como possível talão repetido
-  enfileirar: (payload: DespesaInput, codigo: string) => Promise<void>;
+  enfileirar: (payload: DespesaInput, codigo: string, token?: string) => Promise<void>;
   sincronizar: () => Promise<void>;
   descartar: (clienteId: string) => Promise<void>;
   descartarAviso: (despesaId: number) => void; // marca o aviso como revisto/ignorado
@@ -79,7 +79,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       for (const item of fila) {
         let res: { status: number; corpo: any };
         try {
-          res = await postDespesaSync(item.codigo, item.payload);
+          res = await postDespesaSync(item.codigo, item.token, item.payload);
         } catch {
           break; // sem rede / falhou — tenta mais tarde, mantém a ordem
         }
@@ -90,9 +90,16 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
           }
           await filaRemover(item.clienteId); // sucesso (server idempotente p/ cliente_id)
           mudou = true;
+        } else if (res.status === 401 && item.codigo !== getFamilia()?.codigo) {
+          // Grupo de que já saímos (sem código/token válidos): não há como enviar.
+          await filaAtualizar({ ...item, erro: "Já não estás neste grupo — volta a entrar para enviar." });
         } else if (res.status >= 400 && res.status < 500) {
-          await filaRemover(item.clienteId); // pedido inválido — não vai singrar, remove
-          mudou = true;
+          // O servidor recusou (dados inválidos, categoria apagada, ...). NÃO
+          // apagamos em silêncio: fica na fila com o motivo, para a pessoa
+          // decidir (descartar ou registar de novo à mão).
+          const motivo =
+            typeof res.corpo?.erro === "string" ? res.corpo.erro : "O servidor recusou esta despesa.";
+          if (item.erro !== motivo) await filaAtualizar({ ...item, erro: motivo });
         } else {
           break; // 5xx — problema temporário do servidor, tenta depois
         }
@@ -106,9 +113,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   }, [recarregar, adicionarAviso]);
 
   const enfileirar = useCallback(
-    async (payload: DespesaInput, codigo: string) => {
+    async (payload: DespesaInput, codigo: string, token?: string) => {
       const clienteId = payload.cliente_id ?? `c-${Date.now()}`;
-      await filaAdicionar({ clienteId, codigo, payload, criadoEm: Date.now() });
+      await filaAdicionar({ clienteId, codigo, token, payload, criadoEm: Date.now() });
       await recarregar();
       if (navigator.onLine) sincronizar(); // pode ter sido falha transitória
     },

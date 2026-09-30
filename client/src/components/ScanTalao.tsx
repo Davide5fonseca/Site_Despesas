@@ -3,7 +3,7 @@ import { api, Categoria, TalaoExtraido } from "../api/client";
 import { comprimirImagem } from "../lib/imagem";
 import { lerTalaoLocal } from "../lib/ocrTalao";
 import { lerQRTalao, mesclarQR } from "../lib/qrTalao";
-import { enriquecerLoja } from "../lib/lojas";
+import { enriquecerLoja, reconhecerLojaPorNif } from "../lib/lojas";
 
 interface Props {
   categorias: Categoria[];
@@ -48,10 +48,28 @@ export default function ScanTalao({ categorias, onExtraido, onManual, onFechar }
 
       // 1) QR fiscal (rápido e exato p/ valor, data e chave única). Não falha o fluxo se não houver.
       const qr = await lerQRTalao(comprimida).catch(() => null);
-      // 2) OCR/IA para a loja e a categoria (e fallback de valor/data).
-      const base = usarIA
-        ? await api.lerTalao(comprimida)
-        : await lerTalaoLocal(comprimida, nomes, (p) => setProgresso(p));
+      const lojaPorNif = qr ? reconhecerLojaPorNif(qr.nif) : null;
+
+      // 2) Loja e categoria. Se o QR já deu o valor E reconhecemos a loja pelo
+      //    NIF, temos tudo: sem IA (custa dinheiro) nem OCR (lento). Senão, IA
+      //    quando disponível — e se ela falhar, cai para o OCR do telemóvel.
+      let base: TalaoExtraido;
+      if (qr && qr.valor !== null && lojaPorNif) {
+        base = {
+          valor: null,
+          loja: lojaPorNif.nome,
+          data: null,
+          categoria_sugerida: lojaPorNif.categoria,
+          confianca: "alta",
+          nif: qr.nif,
+        };
+      } else if (usarIA) {
+        base = await api
+          .lerTalao(comprimida)
+          .catch(() => lerTalaoLocal(comprimida, nomes, (p) => setProgresso(p)));
+      } else {
+        base = await lerTalaoLocal(comprimida, nomes, (p) => setProgresso(p));
+      }
 
       const dados = enriquecerLoja(qr ? mesclarQR(base, qr) : base);
 

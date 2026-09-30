@@ -8,3 +8,4 @@ scr-*.png
 *.db-shm
 *.db-wal
 .DS_Store
+client/*.pdf

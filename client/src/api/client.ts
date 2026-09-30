@@ -8,6 +8,11 @@ export interface Familia {
   id: number;
   codigo: string;
   nome: string;
+  temPin?: boolean;
+  // Token de sessão (só em grupos com PIN): obtido ao entrar com o PIN e
+  // exigido pelo servidor em todas as rotas de dados. Guardado no dispositivo.
+  token?: string;
+  rendimento_centimos?: number | null;
 }
 
 const FAMILIA_KEY = "despesas_familia";
@@ -45,7 +50,8 @@ export function setMembroAtual(id: number | null) {
 
 function cabecalhoFamilia(): Record<string, string> {
   const f = getFamilia();
-  return f ? { "x-familia-codigo": f.codigo } : {};
+  if (!f) return {};
+  return { "x-familia-codigo": f.codigo, ...(f.token ? { "x-familia-token": f.token } : {}) };
 }
 
 // ───────────────────────────── Tipos ─────────────────────────────
@@ -114,11 +120,16 @@ export function gerarClienteId(): string {
 // e o corpo (para ler sinais como `duplicado_talao`).
 export async function postDespesaSync(
   codigo: string,
+  token: string | undefined,
   payload: DespesaInput
 ): Promise<{ status: number; corpo: any }> {
   const r = await fetch(`${BASE}/despesas`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-familia-codigo": codigo },
+    headers: {
+      "Content-Type": "application/json",
+      "x-familia-codigo": codigo,
+      ...(token ? { "x-familia-token": token } : {}),
+    },
     body: JSON.stringify(payload),
   });
   let corpo: any = null;
@@ -173,17 +184,27 @@ export interface Saldos {
   }>;
 }
 
+export interface Orcamento {
+  categoria_id: number | null; // null = orçamento total do mês
+  valor_centimos: number;
+}
+
 export interface Resumo {
   mes: string;
   total: number;
+  totalMesAnterior: number;
+  rendimento_centimos: number | null; // definido em Definições; null = sem
+  poupanca_centimos: number | null; // rendimento - total (null sem rendimento)
   porCategoria: Array<{
     categoria_id: number | null;
     nome: string;
     cor: string;
     total: number;
+    anterior: number; // gasto na mesma categoria no mês anterior
   }>;
   porPessoa: Array<{ membro_id: number | null; nome: string; total: number }>;
   evolucao: Array<{ mes: string; total: number }>;
+  orcamentos: Array<Orcamento & { gasto: number }>;
 }
 
 export interface TalaoExtraido {
@@ -271,6 +292,26 @@ export const api = {
       throw err;
     }
   },
+  // Família atual (nome, PIN?, rendimento).
+  familiaAtual() {
+    return pedir<Familia>("/familias/atual");
+  },
+  // Renomear / definir rendimento mensal (cêntimos; null limpa).
+  atualizarFamilia(d: { nome?: string; rendimento_centimos?: number | null }) {
+    return pedir<Familia>("/familias/atual", { method: "PATCH", body: JSON.stringify(d) });
+  },
+
+  // Orçamentos mensais (por categoria; categoria_id null = total). valor null apaga.
+  listarOrcamentos() {
+    return pedir<Orcamento[]>("/orcamentos");
+  },
+  definirOrcamento(categoria_id: number | null, valor_centimos: number | null) {
+    return pedir<Orcamento[]>("/orcamentos", {
+      method: "PUT",
+      body: JSON.stringify({ categoria_id, valor_centimos }),
+    });
+  },
+
   // Devolve a família; em erro lança Error com .pinNecessario quando aplicável.
   async entrarFamilia(codigo: string, pin?: string): Promise<Familia> {
     const resposta = await fetch(`${BASE}/familias/entrar`, {

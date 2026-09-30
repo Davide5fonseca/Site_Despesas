@@ -110,7 +110,7 @@ export default function FormDespesa({ categorias, membros, inicial, talao, onGua
         const fam = getFamilia();
         if (fam) {
           try {
-            await enfileirar(payload, fam.codigo);
+            await enfileirar(payload, fam.codigo, fam.token);
             onGuardado();
             return;
           } catch {

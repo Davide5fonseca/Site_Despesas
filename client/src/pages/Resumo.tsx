@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, getFamilia, Resumo as ResumoT } from "../api/client";
+import { Link } from "react-router-dom";
+import { api, Categoria, getFamilia, Resumo as ResumoT } from "../api/client";
 import { formatarEuros, mesAtual } from "../lib/format";
 import { useAtualizarAuto } from "../lib/useAtualizar";
 import { useGrupo } from "../lib/grupo";
@@ -10,18 +11,22 @@ import Secao from "../components/ui/Secao";
 import { Skeleton } from "../components/ui/Skeleton";
 import GraficoCategorias from "../components/GraficoCategorias";
 import GraficoMensal from "../components/GraficoMensal";
+import BarrasOrcamento from "../components/BarrasOrcamento";
 
 export default function Resumo() {
   const { solo } = useGrupo();
   const [mes, setMes] = useState(mesAtual());
   const [resumo, setResumo] = useState<ResumoT | null>(null);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
 
   const carregar = useCallback(async () => {
     setErro(null);
     try {
-      setResumo(await api.resumo(mes));
+      const [r, c] = await Promise.all([api.resumo(mes), api.listarCategorias()]);
+      setResumo(r);
+      setCategorias(c);
     } catch (e: any) {
       setErro(e?.message || "Falha a carregar dados.");
     }
@@ -54,6 +59,8 @@ export default function Resumo() {
     }
   }
 
+  const eMesAtual = mes === mesAtual();
+
   return (
     <div className="palco space-y-4">
       <CabecalhoPagina
@@ -71,29 +78,35 @@ export default function Resumo() {
 
       <SeletorMes mes={mes} onMes={setMes} />
 
-      {/* Exportar relatório do mês em PDF */}
-      <button
-        className="botao-secundario w-full"
-        onClick={exportar}
-        disabled={exportando || !resumo}
-      >
-        {exportando ? (
-          "A gerar PDF…"
-        ) : (
-          <>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Exportar PDF do mês
-          </>
-        )}
-      </button>
-
       {erro && (
         <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {erro}
         </p>
       )}
+
+      {/* Poupança + comparação com o mês anterior */}
+      {resumo ? <CartaoPoupanca resumo={resumo} /> : <Skeleton className="h-28 w-full rounded-xl2" />}
+
+      {/* Orçamentos do mês */}
+      <Secao
+        titulo="Orçamentos"
+        icone={<IconeAlvo />}
+        acao={
+          <Link to="/definicoes" className="text-xs font-semibold text-marcatxt">
+            Editar
+          </Link>
+        }
+      >
+        {resumo ? (
+          <BarrasOrcamento orcamentos={resumo.orcamentos} categorias={categorias} mesAtual={eMesAtual} />
+        ) : (
+          <div className="space-y-3">
+            {[0, 1].map((i) => (
+              <Skeleton key={i} className="h-7 w-full" />
+            ))}
+          </div>
+        )}
+      </Secao>
 
       {/* Donut por categoria */}
       <Secao titulo="Por categoria" icone={<IconeDonut />}>
@@ -160,10 +173,105 @@ export default function Resumo() {
           </div>
         )}
       </Secao>
+
+      {/* Exportar relatório do mês em PDF */}
+      <button className="botao-secundario w-full" onClick={exportar} disabled={exportando || !resumo}>
+        {exportando ? (
+          "A gerar PDF…"
+        ) : (
+          <>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Exportar PDF do mês
+          </>
+        )}
+      </button>
     </div>
   );
 }
 
+// Cartão do topo: quanto sobrou (se houver rendimento) e variação face ao mês anterior.
+function CartaoPoupanca({ resumo }: { resumo: ResumoT }) {
+  const temRendimento = resumo.rendimento_centimos != null && resumo.poupanca_centimos != null;
+  const poupanca = resumo.poupanca_centimos ?? 0;
+  const positiva = poupanca >= 0;
+  const pctPoupanca =
+    temRendimento && resumo.rendimento_centimos! > 0
+      ? Math.round((poupanca / resumo.rendimento_centimos!) * 100)
+      : null;
+
+  const ant = resumo.totalMesAnterior;
+  const delta = resumo.total - ant;
+  const deltaPct = ant > 0 ? Math.round((delta / ant) * 100) : null;
+
+  return (
+    <section
+      className={`cartao p-5 ${
+        temRendimento ? (positiva ? "border-emerald-500/30" : "border-red-500/30") : ""
+      }`}
+    >
+      {temRendimento ? (
+        <>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            {positiva ? "Poupança do mês" : "Acima do rendimento"}
+          </p>
+          <p
+            className={`mt-1 text-3xl font-black tabular-nums tracking-tight ${
+              positiva ? "text-emerald-300" : "text-red-300"
+            }`}
+          >
+            {positiva ? "" : "−"}
+            {formatarEuros(Math.abs(poupanca))}
+          </p>
+          <p className="mt-1 text-sm text-slate-400">
+            {positiva
+              ? `Sobram ${pctPoupanca ?? 0}% do rendimento de ${formatarEuros(resumo.rendimento_centimos!)}`
+              : `Gastaste mais do que os ${formatarEuros(resumo.rendimento_centimos!)} que entram por mês`}
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Poupança do mês</p>
+          <p className="mt-1 text-sm text-slate-300">
+            Define o teu <span className="font-semibold text-slate-100">rendimento mensal</span> em{" "}
+            <Link to="/definicoes" className="font-semibold text-marcatxt underline">
+              Definições
+            </Link>{" "}
+            para veres aqui quanto sobra todos os meses.
+          </p>
+        </>
+      )}
+
+      <div className="mt-3 flex items-center gap-2 border-t border-linha/10 pt-3 text-sm">
+        <span className="text-slate-400">Face ao mês anterior:</span>
+        {ant === 0 && resumo.total === 0 ? (
+          <span className="text-slate-500">sem dados</span>
+        ) : deltaPct === null ? (
+          <span className="text-slate-300">sem despesas no mês anterior</span>
+        ) : (
+          <span
+            className={`font-semibold tabular-nums ${
+              delta > 0 ? "text-red-300" : delta < 0 ? "text-emerald-300" : "text-slate-300"
+            }`}
+          >
+            {delta > 0 ? "▲" : delta < 0 ? "▼" : "="} {formatarEuros(Math.abs(delta))} ({Math.abs(deltaPct)}%)
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function IconeAlvo() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="2" />
+      <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" />
+    </svg>
+  );
+}
 function IconeDonut() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">

@@ -7,6 +7,22 @@ interface Props {
   total: number;
 }
 
+// Seta com a variação face ao mês anterior (só quando há com que comparar).
+function Variacao({ atual, anterior }: { atual: number; anterior: number }) {
+  if (!anterior || anterior <= 0) return null;
+  const delta = Math.round(((atual - anterior) / anterior) * 100);
+  if (Math.abs(delta) < 1) return <span className="text-xs text-slate-500">=</span>;
+  const sobe = delta > 0;
+  return (
+    <span
+      className={`text-xs font-semibold tabular-nums ${sobe ? "text-red-300" : "text-emerald-300"}`}
+      title="Face ao mês anterior"
+    >
+      {sobe ? "▲" : "▼"} {Math.abs(delta)}%
+    </span>
+  );
+}
+
 export default function GraficoCategorias({ dados, total }: Props) {
   if (!dados.length || total === 0) {
     return (
@@ -51,6 +67,7 @@ export default function GraficoCategorias({ dados, total }: Props) {
             <li key={`${d.categoria_id}`} className="flex items-center gap-3 text-sm">
               <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: d.cor }} />
               <span className="flex-1 truncate text-slate-200">{d.nome}</span>
+              <Variacao atual={d.total} anterior={d.anterior} />
               <span className="tabular-nums text-slate-400">{pct}%</span>
               <span className="w-24 text-right font-semibold tabular-nums text-slate-100">
                 {formatarEuros(d.total)}

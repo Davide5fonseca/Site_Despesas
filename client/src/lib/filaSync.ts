@@ -6,8 +6,10 @@ import type { DespesaInput } from "../api/client";
 export interface ItemFila {
   clienteId: string; // = payload.cliente_id (chave do store e idempotência)
   codigo: string; // código do grupo onde foi criada (cabeçalho ao sincronizar)
+  token?: string; // token de sessão do grupo (grupos com PIN)
   payload: DespesaInput;
   criadoEm: number;
+  erro?: string; // o servidor recusou (4xx): fica visível até o utilizador descartar
 }
 
 const DB = "scanwise";
@@ -38,6 +40,9 @@ export async function filaAdicionar(item: ItemFila): Promise<void> {
   });
   db.close();
 }
+
+// Atualiza um item existente (ex.: marcar o erro devolvido pelo servidor).
+export const filaAtualizar = filaAdicionar;
 
 export async function filaListar(): Promise<ItemFila[]> {
   const db = await abrir();

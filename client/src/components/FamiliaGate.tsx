@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, Familia, setFamilia, setMembroAtual } from "../api/client";
 import BotaoTema from "./BotaoTema";
+import EscolherMembro from "./EscolherMembro";
 
 interface Props {
   onPronto: (f: Familia) => void;
@@ -14,6 +15,8 @@ export default function FamiliaGate({ onPronto }: Props) {
   const [pinEntrar, setPinEntrar] = useState("");
   const [precisaPin, setPrecisaPin] = useState(false);
   const [criada, setCriada] = useState<Familia | null>(null);
+  // Grupo já escolhido; falta dizer quem sou eu neste dispositivo.
+  const [escolher, setEscolher] = useState<Familia | null>(null);
   const [aCarregar, setACarregar] = useState<"solo" | "criar" | "entrar" | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -65,7 +68,7 @@ export default function FamiliaGate({ onPronto }: Props) {
     try {
       const f = await api.entrarFamilia(codigo, pinEntrar.trim() || undefined);
       setFamilia(f);
-      onPronto(f);
+      setEscolher(f); // antes de entrar: quem sou eu neste grupo?
     } catch (e: any) {
       if (e?.pinNecessario) setPrecisaPin(true);
       setErro(e?.message || "Código inválido.");
@@ -83,6 +86,21 @@ export default function FamiliaGate({ onPronto }: Props) {
   }
 
   const ocupado = aCarregar !== null;
+
+  // Passo final (grupos): escolher/criar o membro que sou eu neste dispositivo.
+  if (escolher) {
+    return (
+      <Camada>
+        <div className="cartao p-6">
+          <h2 className="text-xl font-bold text-slate-100">Quem és tu?</h2>
+          <p className="mt-0.5 text-sm text-slate-400">{escolher.nome}</p>
+          <div className="mt-4">
+            <EscolherMembro onPronto={() => onPronto(escolher)} />
+          </div>
+        </div>
+      </Camada>
+    );
+  }
 
   // Ecrã pós-criação de grupo: mostra o código para partilhar.
   if (criada) {
@@ -110,7 +128,7 @@ export default function FamiliaGate({ onPronto }: Props) {
             </button>
           </div>
 
-          <button className="botao-primario w-full" onClick={() => onPronto(criada)}>
+          <button className="botao-primario w-full" onClick={() => setEscolher(criada)}>
             Continuar
           </button>
         </div>

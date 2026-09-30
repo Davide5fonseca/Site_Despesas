@@ -13,8 +13,11 @@ export default function BarraSync() {
   const meus = itens.filter((i) => i.codigo === codigo);
   if (meus.length === 0) return null;
 
+  const comErro = meus.filter((i) => i.erro).length;
   const estado = sincronizando
     ? "A sincronizar…"
+    : comErro
+    ? `${comErro} recusada${comErro > 1 ? "s" : ""} pelo servidor — toca para ver`
     : online
     ? "Vai sincronizar automaticamente"
     : "Sem ligação — fica guardado no telemóvel";
@@ -61,6 +64,7 @@ export default function BarraSync() {
                     {i.payload.descricao || "Despesa"}
                   </p>
                   <p className="text-xs text-slate-400">{i.payload.data}</p>
+                  {i.erro && <p className="mt-0.5 text-xs text-red-300">{i.erro}</p>}
                 </div>
                 <span className="shrink-0 text-sm font-bold tabular-nums text-slate-100">
                   {formatarEuros(i.payload.valor_centimos)}

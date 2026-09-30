@@ -5,6 +5,8 @@ import BotaoTema from "../components/BotaoTema";
 import Modal from "../components/Modal";
 import CabecalhoPagina from "../components/ui/CabecalhoPagina";
 import DespesasFixas from "../components/DespesasFixas";
+import Orcamentos from "../components/Orcamentos";
+import EscolherMembro from "../components/EscolherMembro";
 
 const IconePencil = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
@@ -30,7 +32,7 @@ const CORES = [
 ];
 
 export default function Definicoes() {
-  const { solo, recarregar: recarregarGrupo } = useGrupo();
+  const { solo, membroAtualId, recarregar: recarregarGrupo } = useGrupo();
 
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [membros, setMembros] = useState<Membro[]>([]);
@@ -49,6 +51,8 @@ export default function Definicoes() {
 
   // Conta / grupo
   const [convidar, setConvidar] = useState(false);
+  const [escolherEu, setEscolherEu] = useState(false);
+  const [nomeGrupoEdit, setNomeGrupoEdit] = useState<string | null>(null);
   const [apagarAberto, setApagarAberto] = useState(false);
   const [apagarPasso, setApagarPasso] = useState<1 | 2>(1);
   const [apagando, setApagando] = useState(false);
@@ -143,6 +147,20 @@ export default function Definicoes() {
   }
 
   const familia = getFamilia();
+  const eu = membros.find((m) => m.id === membroAtualId);
+
+  async function guardarNomeGrupo() {
+    const nome = (nomeGrupoEdit ?? "").trim();
+    setNomeGrupoEdit(null);
+    if (!nome || !familia || nome === familia.nome) return;
+    setErro(null);
+    try {
+      const f = await api.atualizarFamilia({ nome });
+      setFamilia({ ...familia, ...f, token: familia.token });
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível renomear.");
+    }
+  }
 
   function copiarCodigo() {
     if (familia) navigator.clipboard?.writeText(familia.codigo).catch(() => {});
@@ -192,7 +210,27 @@ export default function Definicoes() {
           <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
             {solo ? "A minha conta" : "O teu grupo"}
           </h2>
-          <p className="text-lg font-bold text-slate-100">{familia.nome}</p>
+          {nomeGrupoEdit === null ? (
+            <button
+              className="group flex w-full items-center gap-2 text-left"
+              onClick={() => setNomeGrupoEdit(familia.nome)}
+              aria-label="Renomear"
+            >
+              <span className="text-lg font-bold text-slate-100">{familia.nome}</span>
+              <span className="text-slate-500 opacity-70 group-hover:opacity-100">
+                <IconePencil />
+              </span>
+            </button>
+          ) : (
+            <input
+              className="campo py-2 text-lg font-bold"
+              autoFocus
+              value={nomeGrupoEdit}
+              onChange={(e) => setNomeGrupoEdit(e.target.value)}
+              onBlur={guardarNomeGrupo}
+              onKeyDown={(e) => e.key === "Enter" && guardarNomeGrupo()}
+            />
+          )}
 
           {solo ? (
             <>
@@ -233,6 +271,15 @@ export default function Definicoes() {
             </>
           ) : (
             <>
+              <div className="mt-3 flex items-center justify-between rounded-xl bg-noite-900/50 px-3 py-2">
+                <p className="text-sm text-slate-300">
+                  Neste dispositivo sou{" "}
+                  <span className="font-semibold text-slate-100">{eu?.nome ?? "—"}</span>
+                </p>
+                <button className="text-sm font-semibold text-marcatxt" onClick={() => setEscolherEu(true)}>
+                  {eu ? "Mudar" : "Escolher"}
+                </button>
+              </div>
               <p className="mt-3 text-xs text-slate-400">Código para outros entrarem:</p>
               <div className="mt-1 flex items-center gap-2">
                 <span className="flex-1 rounded-xl border border-dashed border-marca-500/40 bg-noite-900/50 py-2 text-center text-xl font-extrabold tracking-[0.25em] text-slate-100">
@@ -408,12 +455,28 @@ export default function Definicoes() {
         </ul>
       </section>
 
+      {/* Rendimento e orçamentos (poupança) */}
+      <Orcamentos categorias={categorias} />
+
       {/* Despesas fixas / subscrições */}
       <DespesasFixas categorias={categorias} membros={membros} />
 
       <p className="px-1 text-center text-xs text-slate-600">
         ScanWise · PWA · dados guardados no teu servidor
       </p>
+
+      {/* Modal: quem sou eu neste dispositivo */}
+      <Modal titulo="Quem és tu?" aberto={escolherEu} onFechar={() => setEscolherEu(false)}>
+        {escolherEu && (
+          <EscolherMembro
+            onPronto={() => {
+              setEscolherEu(false);
+              recarregarTudo();
+            }}
+            onCancelar={() => setEscolherEu(false)}
+          />
+        )}
+      </Modal>
 
       {/* Modal: editar categoria */}
       <Modal titulo="Editar categoria" aberto={catEditar != null} onFechar={() => setCatEditar(null)}>
